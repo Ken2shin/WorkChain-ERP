@@ -1,157 +1,80 @@
-@import 'tailwindcss';
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
-/* NOTA: Si no has instalado 'tw-animate-css', comenta la siguiente línea para evitar errores */
-/* @import 'tw-animate-css'; */
-
-@custom-variant dark (&:is(.dark *));
-
-/* --- 1. VARIABLES BASE (Ajustadas para iOS/One UI) --- */
-:root {
-  --background: oklch(0.985 0.01 240); 
-  --foreground: oklch(0.20 0.02 240);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.20 0.02 240);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.20 0.02 240);
-  --primary: oklch(0.55 0.20 250); 
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.96 0.01 240);
-  --secondary-foreground: oklch(0.35 0.05 240);
-  --muted: oklch(0.96 0.01 240);
-  --muted-foreground: oklch(0.55 0.05 240);
-  --accent: oklch(0.94 0.03 250);
-  --accent-foreground: oklch(0.35 0.10 250);
-  --destructive: oklch(0.65 0.20 25);
-  --destructive-foreground: oklch(1 0 0);
-  --border: oklch(0.92 0.01 240);
-  --input: oklch(0.95 0.01 240);
-  --ring: oklch(0.55 0.20 250);
-  --chart-1: oklch(0.65 0.15 250);
-  --chart-2: oklch(0.70 0.15 160);
-  --chart-3: oklch(0.75 0.15 300);
-  --chart-4: oklch(0.75 0.15 80);
-  --chart-5: oklch(0.75 0.15 30);
-  --radius: 1.25rem; 
-  --sidebar: oklch(0.97 0.01 240);
-  --sidebar-foreground: oklch(0.25 0.02 240);
-  --sidebar-primary: oklch(0.55 0.20 250);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.94 0.02 240);
-  --sidebar-accent-foreground: oklch(0.35 0.05 240);
-  --sidebar-border: oklch(0.90 0.01 240);
-  --sidebar-ring: oklch(0.55 0.20 250);
-}
-
-.dark {
-  --background: oklch(0.12 0.03 260); 
-  --foreground: oklch(0.98 0.01 240);
-  --card: oklch(0.16 0.03 260);
-  --card-foreground: oklch(0.98 0.01 240);
-  --popover: oklch(0.14 0.03 260);
-  --popover-foreground: oklch(0.98 0.01 240);
-  --primary: oklch(0.65 0.18 250);
-  --primary-foreground: oklch(1 0 0);
-  --secondary: oklch(0.22 0.04 260);
-  --secondary-foreground: oklch(0.98 0.01 240);
-  --muted: oklch(0.20 0.04 260);
-  --muted-foreground: oklch(0.70 0.05 240);
-  --accent: oklch(0.22 0.05 250);
-  --accent-foreground: oklch(0.98 0.01 240);
-  --destructive: oklch(0.45 0.15 25);
-  --destructive-foreground: oklch(0.98 0 0);
-  --border: oklch(0.22 0.04 260);
-  --input: oklch(0.20 0.04 260);
-  --ring: oklch(0.55 0.20 250);
-  --chart-1: oklch(0.60 0.15 250);
-  --chart-2: oklch(0.65 0.15 160);
-  --chart-3: oklch(0.65 0.15 300);
-  --chart-4: oklch(0.65 0.15 80);
-  --chart-5: oklch(0.65 0.15 30);
-  --sidebar: oklch(0.10 0.03 260);
-  --sidebar-foreground: oklch(0.98 0 0);
-  --sidebar-primary: oklch(0.65 0.18 250);
-  --sidebar-primary-foreground: oklch(1 0 0);
-  --sidebar-accent: oklch(0.18 0.04 260);
-  --sidebar-accent-foreground: oklch(0.98 0 0);
-  --sidebar-border: oklch(0.20 0.04 260);
-  --sidebar-ring: oklch(0.55 0.20 250);
-}
-
-@theme inline {
-  --font-sans: 'Geist', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-  --font-mono: 'Geist Mono', ui-monospace, SFMono-Regular, monospace;
-
-  /* Mapeo de colores al Theme de Tailwind v4 */
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-card: var(--card);
-  --color-card-foreground: var(--card-foreground);
-  --color-popover: var(--popover);
-  --color-popover-foreground: var(--popover-foreground);
-  --color-primary: var(--primary);
-  --color-primary-foreground: var(--primary-foreground);
-  --color-secondary: var(--secondary);
-  --color-secondary-foreground: var(--secondary-foreground);
-  --color-muted: var(--muted);
-  --color-muted-foreground: var(--muted-foreground);
-  --color-accent: var(--accent);
-  --color-accent-foreground: var(--accent-foreground);
-  --color-destructive: var(--destructive);
-  --color-destructive-foreground: var(--destructive-foreground);
-  --color-border: var(--border);
-  --color-input: var(--input);
-  --color-ring: var(--ring);
-  --color-chart-1: var(--chart-1);
-  --color-chart-2: var(--chart-2);
-  --color-chart-3: var(--chart-3);
-  --color-chart-4: var(--chart-4);
-  --color-chart-5: var(--chart-5);
-  
-  /* Radios "One UI" (Muy redondeados) */
-  --radius-sm: calc(var(--radius) - 6px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 8px);
-  --radius-2xl: calc(var(--radius) + 16px);
-  --radius-3xl: 3rem;
-
-  /* Sidebar Colors */
-  --color-sidebar: var(--sidebar);
-  --color-sidebar-foreground: var(--sidebar-foreground);
-  --color-sidebar-primary: var(--sidebar-primary);
-  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
-  --color-sidebar-accent: var(--sidebar-accent);
-  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
-  --color-sidebar-border: var(--sidebar-border);
-  --color-sidebar-ring: var(--sidebar-ring);
-
-  /* Animaciones "Caricaturescas" (Bouncy) */
-  --animate-blob: blob 7s infinite;
-  --animate-float: float 6s ease-in-out infinite;
-  --animate-bounce-in: bounce-in 0.5s cubic-bezier(0.68, -0.55, 0.265, 1.55) forwards;
-
-  @keyframes blob {
-    0% { transform: translate(0px, 0px) scale(1); }
-    33% { transform: translate(30px, -50px) scale(1.1); }
-    66% { transform: translate(-20px, 20px) scale(0.9); }
-    100% { transform: translate(0px, 0px) scale(1); }
-  }
-
-  @keyframes float {
-    0%, 100% { transform: translateY(0); }
-    50% { transform: translateY(-10px); }
-  }
-
-  @keyframes bounce-in {
-    0% { opacity: 0; transform: scale(0.3); }
-    50% { opacity: 1; transform: scale(1.05); }
-    70% { transform: scale(0.9); }
-    100% { transform: scale(1); }
-  }
-}
-
-/* --- 3. ESTILOS LIQUID GLASS & IOS --- */
+/* --- 1. VARIABLES BASE --- */
 @layer base {
+  :root {
+    --background: oklch(0.985 0.01 240); 
+    --foreground: oklch(0.20 0.02 240);
+    --card: oklch(1 0 0);
+    --card-foreground: oklch(0.20 0.02 240);
+    --popover: oklch(1 0 0);
+    --popover-foreground: oklch(0.20 0.02 240);
+    --primary: oklch(0.55 0.20 250); 
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.96 0.01 240);
+    --secondary-foreground: oklch(0.35 0.05 240);
+    --muted: oklch(0.96 0.01 240);
+    --muted-foreground: oklch(0.55 0.05 240);
+    --accent: oklch(0.94 0.03 250);
+    --accent-foreground: oklch(0.35 0.10 250);
+    --destructive: oklch(0.65 0.20 25);
+    --destructive-foreground: oklch(1 0 0);
+    --border: oklch(0.92 0.01 240);
+    --input: oklch(0.95 0.01 240);
+    --ring: oklch(0.55 0.20 250);
+    --chart-1: oklch(0.65 0.15 250);
+    --chart-2: oklch(0.70 0.15 160);
+    --chart-3: oklch(0.75 0.15 300);
+    --chart-4: oklch(0.75 0.15 80);
+    --chart-5: oklch(0.75 0.15 30);
+    --radius: 1.25rem; 
+    --sidebar: oklch(0.97 0.01 240);
+    --sidebar-foreground: oklch(0.25 0.02 240);
+    --sidebar-primary: oklch(0.55 0.20 250);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.94 0.02 240);
+    --sidebar-accent-foreground: oklch(0.35 0.05 240);
+    --sidebar-border: oklch(0.90 0.01 240);
+    --sidebar-ring: oklch(0.55 0.20 250);
+  }
+
+  .dark {
+    --background: oklch(0.12 0.03 260); 
+    --foreground: oklch(0.98 0.01 240);
+    --card: oklch(0.16 0.03 260);
+    --card-foreground: oklch(0.98 0.01 240);
+    --popover: oklch(0.14 0.03 260);
+    --popover-foreground: oklch(0.98 0.01 240);
+    --primary: oklch(0.65 0.18 250);
+    --primary-foreground: oklch(1 0 0);
+    --secondary: oklch(0.22 0.04 260);
+    --secondary-foreground: oklch(0.98 0.01 240);
+    --muted: oklch(0.20 0.04 260);
+    --muted-foreground: oklch(0.70 0.05 240);
+    --accent: oklch(0.22 0.05 250);
+    --accent-foreground: oklch(0.98 0.01 240);
+    --destructive: oklch(0.45 0.15 25);
+    --destructive-foreground: oklch(0.98 0 0);
+    --border: oklch(0.22 0.04 260);
+    --input: oklch(0.20 0.04 260);
+    --ring: oklch(0.55 0.20 250);
+    --chart-1: oklch(0.60 0.15 250);
+    --chart-2: oklch(0.65 0.15 160);
+    --chart-3: oklch(0.65 0.15 300);
+    --chart-4: oklch(0.65 0.15 80);
+    --chart-5: oklch(0.65 0.15 30);
+    --sidebar: oklch(0.10 0.03 260);
+    --sidebar-foreground: oklch(0.98 0 0);
+    --sidebar-primary: oklch(0.65 0.18 250);
+    --sidebar-primary-foreground: oklch(1 0 0);
+    --sidebar-accent: oklch(0.18 0.04 260);
+    --sidebar-accent-foreground: oklch(0.98 0 0);
+    --sidebar-border: oklch(0.20 0.04 260);
+    --sidebar-ring: oklch(0.55 0.20 250);
+  }
+
   * {
     @apply border-border outline-ring/50;
   }
@@ -163,17 +86,21 @@
         radial-gradient(at 50% 0%, hsla(225,39%,30%,1) 0, transparent 50%), 
         radial-gradient(at 100% 0%, hsla(339,49%,30%,1) 0, transparent 50%);
     background-attachment: fixed;
-    @media (prefers-color-scheme: light) {
-        background-image: 
-            radial-gradient(at 40% 20%, oklch(0.96 0.03 240) 0px, transparent 50%),
-            radial-gradient(at 80% 0%, oklch(0.95 0.05 200) 0px, transparent 50%),
-            radial-gradient(at 0% 50%, oklch(0.95 0.05 300) 0px, transparent 50%);
-    }
+  }
+}
+
+/* Fix para media query fuera de @layer base si da error de sintaxis, 
+   o manteniéndolo dentro si tu versión de postcss lo soporta bien */
+@media (prefers-color-scheme: light) {
+  body {
+      background-image: 
+          radial-gradient(at 40% 20%, oklch(0.96 0.03 240) 0px, transparent 50%),
+          radial-gradient(at 80% 0%, oklch(0.95 0.05 200) 0px, transparent 50%),
+          radial-gradient(at 0% 50%, oklch(0.95 0.05 300) 0px, transparent 50%);
   }
 }
 
 @layer components {
-  /* Clase simple para usar en elementos sueltos */
   .liquid-glass {
     @apply bg-white/60 dark:bg-black/40 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)];
   }
@@ -186,10 +113,6 @@
     @apply relative overflow-hidden rounded-2xl bg-primary px-6 py-3 font-bold text-primary-foreground shadow-lg shadow-primary/30 transition-all duration-300 hover:scale-105 hover:shadow-primary/50 active:scale-95 active:rotate-1;
   }
 
-  /* CORRECCIÓN AQUÍ: 
-     En lugar de usar "@apply liquid-glass", expandimos los estilos directamente.
-     Esto elimina el error "Cannot apply unknown utility class".
-  */
   .card-oneui {
     @apply bg-white/60 dark:bg-black/40 backdrop-blur-2xl border border-white/40 dark:border-white/10 shadow-[0_8px_32px_0_rgba(31,38,135,0.15)] rounded-3xl p-6 transition-transform hover:-translate-y-1 duration-500 ease-out;
   }
