@@ -1,0 +1,57 @@
+# --- SEGURIDAD CRÍTICA (Antihackeo) ---
+# Ignora cualquier archivo .env en cualquier carpeta
+.env
+.env.*
+!.env.example
+**/.env
+**/.env.*
+
+# Claves y certificados de seguridad
+*.pem
+*.pub
+*.key
+id_rsa
+id_rsa.pub
+
+# --- DEPENDENCIAS (No subir nunca) ---
+node_modules/
+**/node_modules/
+vendor/
+**/vendor/
+
+# --- ARCHIVOS DE SISTEMA Y IDE ---
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# --- FRAMEWORKS ---
+
+# Next.js / Astro / Frontend
+.next/
+**/out/
+**/dist/
+build/
+.vercel/
+*.tsbuildinfo
+next-env.d.ts
+
+# Laravel / Backend
+**/storage/logs/
+**/storage/framework/cache/
+**/storage/framework/sessions/
+**/storage/framework/views/
+**/storage/framework/testing/
+**/bootstrap/cache/
+composer.lock
+phpunit.xml
+
+# Docker
+docker-compose.override.yml
