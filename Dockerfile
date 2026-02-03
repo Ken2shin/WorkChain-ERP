@@ -3,25 +3,36 @@
 # ==========================================
 FROM debian:bookworm-slim AS multi-builder
 
-# Instalamos compiladores para C, C++, Go, Swift y .NET
+# Instalamos dependencias base y herramientas de compilación
 RUN apt-get update && apt-get install -y \
-    curl build-essential clang lldb lld \
-    golang-go swift-all dotnet-sdk-8.0 nasm \
+    curl wget gnupg software-properties-common \
+    build-essential clang lldb lld nasm \
+    binutils-gold libicu-dev libcurl4-openssl-dev libedit-dev libsqlite3-dev \
+    libncurses6-dev libpython3-dev libxml2-dev pkg-config uuid-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Instalamos Rust manualmente (más flexible)
+# 1. Configurar e Instalar .NET SDK 8.0 (Repositorio Oficial Microsoft)
+RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
+    && dpkg -i packages-microsoft-prod.deb \
+    && rm packages-microsoft-prod.deb \
+    && apt-get update && apt-get install -y dotnet-sdk-8.0
+
+# 2. Instalar Swift (Binarios oficiales para Debian 12)
+RUN curl -fsSL https://download.swift.org/swift-5.9.2-release/debian12/swift-5.9.2-RELEASE/swift-5.9.2-RELEASE-debian12.tar.gz -o swift.tar.gz \
+    && tar -xzf swift.tar.gz --strip-components=1 -C /usr \
+    && rm swift.tar.gz
+
+# 3. Instalar Go y Rust
+RUN apt-get update && apt-get install -y golang-go
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
 WORKDIR /app/services
 COPY ./services .
 
-# --- Ejemplos de Compilación (Descomenta según necesites) ---
-# Rust: RUN cd rust_module && cargo build --release
-# Go:   RUN cd go_service && go build -o main .
-# C++:  RUN g++ -O3 cpp_core.cpp -o cpp_core
-# C#:   RUN dotnet publish -c Release -o ./publish
-# ASM:  RUN nasm -f elf64 logic.asm -o logic.o && ld logic.o -o logic
+# --- Compilación de módulos (Descomenta según tu estructura) ---
+# RUN cd rust_module && cargo build --release
+# RUN cd go_service && go build -o main .
 
 # ==========================================
 # ETAPA 2: BUILD DEL FRONTEND (ASTRO)
@@ -34,22 +45,26 @@ COPY ./frontend .
 RUN pnpm run build
 
 # ==========================================
-# ETAPA 3: IMAGEN FINAL DE PRODUCCIÓN (Optimizada)
+# ETAPA 3: IMAGEN FINAL DE PRODUCCIÓN
 # ==========================================
 FROM php:8.3-fpm
 
-# Runtimes necesarios para ejecutar binarios de C++, Swift, .NET y Go
-RUN apt-get update && apt-get install -y \
+# Instalación de Runtimes y Repositorio de Microsoft para .NET Runtime
+RUN apt-get update && apt-get install -y wget gnupg \
+    && wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
+    && dpkg -i packages-microsoft-prod.deb \
+    && rm packages-microsoft-prod.deb \
+    && apt-get update && apt-get install -y \
     git curl libpq-dev libonig-dev libxml2-dev zip unzip \
     supervisor nginx \
-    libstdc++6 libgcc-s1 \
-    libicu-dev dotnet-runtime-8.0 \
+    libstdc++6 libgcc-s1 libicu-dev \
+    dotnet-runtime-8.0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Extensiones de PHP para PostgreSQL y rendimiento
+# Extensiones PHP para PostgreSQL
 RUN docker-php-ext-install pdo pdo_pgsql mbstring xml pcntl bcmath
 
-# Instalación de Composer
+# Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
@@ -62,17 +77,16 @@ RUN composer install --no-interaction --optimize-autoloader --no-dev
 COPY --from=frontend-builder /app/frontend/dist ./public/app
 
 # 3. Binarios Compilados (desde Etapa 1)
-# Copiamos solo los ejecutables finales a /var/www/bin
+# Asegúrate de que tus binarios se muevan a esta carpeta en la etapa 1
 COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 
-# Configuración de Nginx y Supervisor
+# Configuración Nginx y Supervisor
 COPY ./nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/worker.conf
 
-# Permisos de seguridad para Laravel
+# Permisos
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 80
 
-# Orquestación de servicios
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/worker.conf"]
