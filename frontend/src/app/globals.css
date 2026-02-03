@@ -1,0 +1,64 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --background: oklch(0.98 0.01 240);
+  --foreground: oklch(0.20 0.02 240);
+  --primary: oklch(0.60 0.18 250); /* Azul vibrante pero profesional */
+  --primary-foreground: oklch(1 0 0);
+  --card: oklch(1 0 0 / 0.6);
+  --card-foreground: oklch(0.20 0.02 240);
+  --border: oklch(0.90 0.02 240 / 0.4);
+  --ring: oklch(0.60 0.18 250 / 0.5);
+}
+
+.dark {
+  --background: oklch(0.14 0.02 260);
+  --foreground: oklch(0.98 0.01 240);
+  --card: oklch(0.18 0.03 260 / 0.6);
+  --border: oklch(1 0 0 / 0.1);
+}
+
+@layer base {
+  body {
+    @apply bg-background text-foreground antialiased min-h-screen;
+    /* Fondo estilo macOS Liquid */
+    background-image: 
+      radial-gradient(at 0% 0%, oklch(0.65 0.15 250 / 0.15) 0px, transparent 50%),
+      radial-gradient(at 100% 100%, oklch(0.75 0.15 300 / 0.15) 0px, transparent 50%);
+    background-attachment: fixed;
+  }
+}
+
+@layer components {
+  /* Efecto Glassmorphism de iOS/Mac */
+  .liquid-glass {
+    @apply backdrop-blur-3xl bg-white/40 dark:bg-black/40 
+           border border-white/40 dark:border-white/10 
+           shadow-[0_8px_32px_rgba(0,0,0,0.08)];
+  }
+
+  /* Tarjeta estilo One UI 8 - Caricaturesca pero Empresarial */
+  .card-oneui {
+    @apply liquid-glass rounded-oneui-xl p-8 
+           transition-all duration-500 ease-[cubic-bezier(0.34,1.56,0.64,1)]
+           hover:scale-[1.02] hover:-translate-y-2 active:scale-95;
+  }
+
+  /* Botones Bouncy */
+  .btn-bouncy {
+    @apply relative overflow-hidden rounded-oneui bg-primary px-6 py-3 
+           font-bold text-white shadow-lg shadow-primary/30 
+           transition-all duration-300 hover:brightness-110 
+           active:scale-90 active:rotate-2;
+  }
+  
+  /* Inputs redondeados tipo One UI */
+  .ios-input {
+    @apply h-14 rounded-oneui bg-white/20 dark:bg-black/20 
+           border-2 border-transparent px-5 font-medium backdrop-blur-md 
+           transition-all focus:border-primary/50 focus:bg-white/80 
+           dark:focus:bg-black/80 outline-none;
+  }
+}
