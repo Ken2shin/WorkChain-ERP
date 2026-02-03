@@ -30,7 +30,7 @@ ENV PATH="/usr/local/go/bin:${PATH}"
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
-# Instalación de .NET
+# Instalación de .NET SDK
 RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
     && bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet \
     && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet \
@@ -56,7 +56,7 @@ RUN pnpm run build
 # ==========================================
 FROM php:8.3-fpm
 
-# 1. Instalar librerías del sistema (Incluye libicu76 para Trixie y libzip-dev para Composer)
+# 1. Instalar librerías del sistema (libicu76 + zip + runtimes)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget gnupg ca-certificates nginx supervisor \
     git curl zip unzip libpq-dev libonig-dev libxml2-dev libzip-dev \
@@ -69,18 +69,18 @@ RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
     && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet \
     && rm /tmp/dotnet-install.sh
 
-# 3. Extensiones PHP (Añadido 'zip' que es vital para Composer)
+# 3. Extensiones PHP (Incluye zip vital para Composer)
 RUN docker-php-ext-install pdo pdo_pgsql mbstring xml pcntl bcmath zip
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# 4. Instalar dependencias de Laravel (CON EL FIX --no-scripts)
+# 4. Backend Laravel (Con --no-scripts para evitar error de artisan)
 COPY ./laravel .
 RUN composer install --no-interaction --optimize-autoloader --no-dev --no-scripts
 
-# 5. Copiar Frontend y Binarios
+# 5. Frontend y Binarios
 COPY --from=frontend-builder /app/frontend/dist ./public/app
 COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 
@@ -88,7 +88,17 @@ COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/worker.conf
 
+# 7. CORRECCIÓN FINAL: Crear carpetas faltantes antes de asignar permisos
+#    Git ignora estas carpetas, por eso fallaba el chown. Las creamos a mano:
+RUN mkdir -p /var/www/storage/framework/sessions \
+    /var/www/storage/framework/views \
+    /var/www/storage/framework/cache \
+    /var/www/storage/logs \
+    /var/www/bootstrap/cache
+
+# 8. Asignar Permisos Correctos
 RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 80
 
