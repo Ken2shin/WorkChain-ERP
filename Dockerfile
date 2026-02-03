@@ -36,7 +36,7 @@ RUN pnpm run build
 # ==========================================
 # ETAPA 3: IMAGEN FINAL DE PRODUCCIÓN (Optimizada)
 # ==========================================
-FROM php:8.4-fpm
+FROM php:8.3-fpm
 
 # Runtimes necesarios para ejecutar binarios de C++, Swift, .NET y Go
 RUN apt-get update && apt-get install -y \
