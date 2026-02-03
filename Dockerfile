@@ -6,7 +6,7 @@ FROM debian:bookworm-slim AS multi-builder
 # 1. Instalar dependencias base
 # CORRECCIÓN: Cambiado 'libncurses6-dev' por 'libncurses-dev'
 RUN apt-get update && apt-get install -y \
-    curl wget gnupg software-properties-common \
+    curl wget gnupg ca-certificates software-properties-common \
     build-essential clang lldb lld nasm \
     binutils-gold libicu-dev libcurl4-openssl-dev libedit-dev libsqlite3-dev \
     libncurses-dev libpython3-dev libxml2-dev pkg-config uuid-dev \
@@ -14,11 +14,12 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # 2. Configurar e Instalar .NET SDK 8.0
-RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
-    && dpkg -i packages-microsoft-prod.deb \
-    && rm packages-microsoft-prod.deb \
-    && apt-get update \
-    && apt-get install -y dotnet-sdk-8.0
+# NOTA: Usamos el script oficial dotnet-install.sh para evitar depender del
+# repositorio APT de Microsoft (problemas de firma SHA1 con sequoia/apt).
+RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
+    && bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet \
+    && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet \
+    && rm /tmp/dotnet-install.sh
 
 # 3. Instalar Swift
 RUN curl -fsSL https://download.swift.org/swift-5.9.2-release/debian12/swift-5.9.2-RELEASE/swift-5.9.2-RELEASE-debian12.tar.gz -o swift.tar.gz \
@@ -26,7 +27,8 @@ RUN curl -fsSL https://download.swift.org/swift-5.9.2-release/debian12/swift-5.9
     && rm swift.tar.gz
 
 # 4. Instalar Go y Rust
-RUN apt-get update && apt-get install -y golang-go
+RUN apt-get update && apt-get install -y golang-go \
+    && rm -rf /var/lib/apt/lists/*
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
@@ -51,17 +53,19 @@ RUN pnpm run build
 # ==========================================
 FROM php:8.3-fpm
 
-# Runtimes necesarios
-RUN apt-get update && apt-get install -y wget gnupg \
-    && wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
-    && dpkg -i packages-microsoft-prod.deb \
-    && rm packages-microsoft-prod.deb \
-    && apt-get update && apt-get install -y \
+# Runtimes necesarios (sin usar el repo APT de Microsoft)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    wget gnupg ca-certificates \
     git curl libpq-dev libonig-dev libxml2-dev zip unzip \
     supervisor nginx \
     libstdc++6 libgcc-s1 libicu-dev \
-    dotnet-runtime-8.0 \
     && rm -rf /var/lib/apt/lists/*
+
+# Instalar dotnet runtime usando el instalador oficial (evita el error de firma SHA1)
+RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
+    && bash /tmp/dotnet-install.sh --channel 8.0 --runtime dotnet --install-dir /usr/share/dotnet \
+    && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet \
+    && rm /tmp/dotnet-install.sh
 
 # Extensiones PHP
 RUN docker-php-ext-install pdo pdo_pgsql mbstring xml pcntl bcmath
