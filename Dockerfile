@@ -4,11 +4,12 @@
 FROM debian:bookworm-slim AS multi-builder
 
 # 1. Instalar dependencias base
+# CORRECCIÓN: Cambiado 'libncurses6-dev' por 'libncurses-dev'
 RUN apt-get update && apt-get install -y \
     curl wget gnupg software-properties-common \
     build-essential clang lldb lld nasm \
     binutils-gold libicu-dev libcurl4-openssl-dev libedit-dev libsqlite3-dev \
-    libncurses6-dev libpython3-dev libxml2-dev pkg-config uuid-dev \
+    libncurses-dev libpython3-dev libxml2-dev pkg-config uuid-dev \
     git \
     && rm -rf /var/lib/apt/lists/*
 
@@ -32,13 +33,8 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app/services
 COPY ./services .
 
-# --- PREPARACIÓN DE SALIDA (Truco para evitar errores si no hay binarios aún) ---
-# Creamos la carpeta y un archivo oculto para que el COPY de abajo nunca falle
+# --- PREPARACIÓN DE SALIDA ---
 RUN mkdir -p bin_outputs && touch bin_outputs/.gitkeep
-
-# --- Ejemplos de Compilación (Tus binarios reales irían aquí) ---
-# RUN cd rust_module && cargo build --release && cp target/release/mi_binario ../bin_outputs/
-# RUN dotnet publish csharp_service -c Release -o ../bin_outputs/
 
 # ==========================================
 # ETAPA 2: BUILD DEL FRONTEND (ASTRO)
@@ -82,8 +78,7 @@ RUN composer install --no-interaction --optimize-autoloader --no-dev
 # 2. Frontend Astro
 COPY --from=frontend-builder /app/frontend/dist ./public/app
 
-# 3. Binarios Compilados (CORREGIDO)
-# Copiamos todo lo que haya en bin_outputs (incluido el .gitkeep si no hay nada más)
+# 3. Binarios Compilados
 COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 
 # Configuración Nginx y Supervisor
