@@ -3,26 +3,30 @@
 # ==========================================
 FROM debian:bookworm-slim AS multi-builder
 
-# Instalamos dependencias base y herramientas de compilación
+# 1. Instalar dependencias base necesarias para agregar repositorios
 RUN apt-get update && apt-get install -y \
     curl wget gnupg software-properties-common \
     build-essential clang lldb lld nasm \
     binutils-gold libicu-dev libcurl4-openssl-dev libedit-dev libsqlite3-dev \
     libncurses6-dev libpython3-dev libxml2-dev pkg-config uuid-dev \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
-# 1. Configurar e Instalar .NET SDK 8.0 (Repositorio Oficial Microsoft)
+# 2. Configurar e Instalar .NET SDK 8.0 (Repositorio Oficial Microsoft)
+# Descargamos el registro de paquetes de Microsoft, lo instalamos y luego instalamos el SDK
 RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
     && dpkg -i packages-microsoft-prod.deb \
     && rm packages-microsoft-prod.deb \
-    && apt-get update && apt-get install -y dotnet-sdk-8.0
+    && apt-get update \
+    && apt-get install -y dotnet-sdk-8.0
 
-# 2. Instalar Swift (Binarios oficiales para Debian 12)
+# 3. Instalar Swift (Binarios oficiales para Debian 12)
+# Descargamos Swift directamente desde swift.org
 RUN curl -fsSL https://download.swift.org/swift-5.9.2-release/debian12/swift-5.9.2-RELEASE/swift-5.9.2-RELEASE-debian12.tar.gz -o swift.tar.gz \
     && tar -xzf swift.tar.gz --strip-components=1 -C /usr \
     && rm swift.tar.gz
 
-# 3. Instalar Go y Rust
+# 4. Instalar Go y Rust (Repositorios estándar y script oficial)
 RUN apt-get update && apt-get install -y golang-go
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -30,9 +34,9 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app/services
 COPY ./services .
 
-# --- Compilación de módulos (Descomenta según tu estructura) ---
+# --- Aquí irían tus comandos de compilación (Ejemplos) ---
 # RUN cd rust_module && cargo build --release
-# RUN cd go_service && go build -o main .
+# RUN dotnet publish csharp_service -c Release -o ./bin
 
 # ==========================================
 # ETAPA 2: BUILD DEL FRONTEND (ASTRO)
@@ -50,6 +54,7 @@ RUN pnpm run build
 FROM php:8.3-fpm
 
 # Instalación de Runtimes y Repositorio de Microsoft para .NET Runtime
+# (Necesario para ejecutar lo que compilaste en la Etapa 1)
 RUN apt-get update && apt-get install -y wget gnupg \
     && wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
     && dpkg -i packages-microsoft-prod.deb \
@@ -77,8 +82,8 @@ RUN composer install --no-interaction --optimize-autoloader --no-dev
 COPY --from=frontend-builder /app/frontend/dist ./public/app
 
 # 3. Binarios Compilados (desde Etapa 1)
-# Asegúrate de que tus binarios se muevan a esta carpeta en la etapa 1
-COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
+# IMPORTANTE: Asegúrate de que esta carpeta exista o comenta esta línea si aún no compilas nada
+COPY --from=multi-builder /app/services/bin_outputs/* ./bin/ || true
 
 # Configuración Nginx y Supervisor
 COPY ./nginx.conf /etc/nginx/sites-available/default
