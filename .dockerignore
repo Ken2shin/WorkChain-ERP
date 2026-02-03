@@ -1,13 +1,12 @@
-# .dockerignore
 node_modules
+frontend/node_modules
+laravel/vendor
 .git
-.gitignore
-.env
+.github
+.next
+.vscode
 dist
 build
-.DS_Store
-npm-debug.log
-yarn-error.log
-pnpm-debug.log
-.idea
-.vscode
+.env
+*.log
+go1.21.0.linux-amd64.tar.gz
