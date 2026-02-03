@@ -5,6 +5,15 @@
 !.env.example
 **/.env
 **/.env.*
+# --- Binarios de Lenguajes Compilados ---
+**/target/         # Rust
+**/bin/            # C# / C++
+**/obj/            # C# / C++
+*.exe
+*.dll
+*.so
+*.dylib
+*.out
 
 # Claves y certificados de seguridad
 *.pem
