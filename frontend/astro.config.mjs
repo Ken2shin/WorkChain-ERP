@@ -1,30 +1,31 @@
 import { defineConfig } from 'astro/config';
 import node from '@astrojs/node';
 import alpinejs from '@astrojs/alpinejs';
+import tailwind from '@astrojs/tailwind'; // ¡Añadido!
 
 export default defineConfig({
-  // 1. SALIDA: Static es el estándar moderno de Astro
-  output: 'static', 
+  // 1. SALIDA: 'server' permite manejar lógica de backend/SaaS en tiempo real
+  output: 'server', 
 
-  // 2. ADAPTADOR: Modo standalone para correrlo fácil con Node
+  // 2. ADAPTADOR: Configurado para el puerto que usa Koyeb/Docker
   adapter: node({
     mode: 'standalone', 
   }),
 
-  // 3. INTEGRACIONES: AlpineJS oficial
-  integrations: [alpinejs()],
+  // 3. INTEGRACIONES: Agregamos Tailwind para que reconozca tu globals.css
+  integrations: [
+    alpinejs(),
+    tailwind({
+      applyBaseStyles: false, // Evita conflictos con tu globals.css manual
+    })
+  ],
 
-  // 4. CONFIGURACIÓN DE VITE (¡Aquí está la magia para tu CSS!)
+  // 4. CONFIGURACIÓN DE VITE
   vite: {
-    server: {
-      fs: {
-        // Esto permite que Astro lea archivos un nivel arriba (en la carpeta WorkChain/app)
-        allow: ['..'] 
-      }
-    },
     ssr: {
       noExternal: ['alpinejs'],
     },
+    // Eliminamos 'allow: [..]' para evitar fallos de permisos en el contenedor Linux
   },
 
   // 5. SEGURIDAD
