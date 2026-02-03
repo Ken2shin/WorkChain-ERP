@@ -17,16 +17,20 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
+# Instalación de Swift
 COPY --from=swift-source /usr/bin/swift* /usr/bin/
 COPY --from=swift-source /usr/lib/swift /usr/lib/swift
 COPY --from=swift-source /usr/lib/libswift* /usr/lib/
 
+# Instalación de Go
 COPY --from=go-source /usr/local/go /usr/local/go
 ENV PATH="/usr/local/go/bin:${PATH}"
 
+# Instalación de Rust
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
 
+# Instalación de .NET
 RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
     && bash /tmp/dotnet-install.sh --channel 8.0 --install-dir /usr/share/dotnet \
     && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet \
@@ -52,31 +56,35 @@ RUN pnpm run build
 # ==========================================
 FROM php:8.3-fpm
 
-# CORRECCIÓN CRÍTICA: Se cambia libicu72 por libicu76 para Debian Trixie
+# 1. Instalar librerías del sistema (Incluye libicu76 para Trixie y libzip-dev para Composer)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget gnupg ca-certificates nginx supervisor \
-    git curl zip unzip libpq-dev libonig-dev libxml2-dev \
+    git curl zip unzip libpq-dev libonig-dev libxml2-dev libzip-dev \
     libstdc++6 libgcc-s1 libicu76 \
     && rm -rf /var/lib/apt/lists/*
 
+# 2. Instalar .NET Runtime
 RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
     && bash /tmp/dotnet-install.sh --channel 8.0 --runtime dotnet --install-dir /usr/share/dotnet \
     && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet \
     && rm /tmp/dotnet-install.sh
 
-RUN docker-php-ext-install pdo pdo_pgsql mbstring xml pcntl bcmath
+# 3. Extensiones PHP (Añadido 'zip' que es vital para Composer)
+RUN docker-php-ext-install pdo pdo_pgsql mbstring xml pcntl bcmath zip
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
+# 4. Instalar dependencias de Laravel (CON EL FIX --no-scripts)
 COPY ./laravel .
-RUN composer install --no-interaction --optimize-autoloader --no-dev
+RUN composer install --no-interaction --optimize-autoloader --no-dev --no-scripts
 
+# 5. Copiar Frontend y Binarios
 COPY --from=frontend-builder /app/frontend/dist ./public/app
 COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 
-# Asegúrate de que estos archivos estén en la carpeta 'docker/' de tu raíz
+# 6. Configuración de Servidor
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/worker.conf
 
