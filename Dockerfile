@@ -3,7 +3,7 @@
 # ==========================================
 FROM debian:bookworm-slim AS multi-builder
 
-# 1. Instalar dependencias base necesarias para agregar repositorios
+# 1. Instalar dependencias base
 RUN apt-get update && apt-get install -y \
     curl wget gnupg software-properties-common \
     build-essential clang lldb lld nasm \
@@ -12,21 +12,19 @@ RUN apt-get update && apt-get install -y \
     git \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Configurar e Instalar .NET SDK 8.0 (Repositorio Oficial Microsoft)
-# Descargamos el registro de paquetes de Microsoft, lo instalamos y luego instalamos el SDK
+# 2. Configurar e Instalar .NET SDK 8.0
 RUN wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
     && dpkg -i packages-microsoft-prod.deb \
     && rm packages-microsoft-prod.deb \
     && apt-get update \
     && apt-get install -y dotnet-sdk-8.0
 
-# 3. Instalar Swift (Binarios oficiales para Debian 12)
-# Descargamos Swift directamente desde swift.org
+# 3. Instalar Swift
 RUN curl -fsSL https://download.swift.org/swift-5.9.2-release/debian12/swift-5.9.2-RELEASE/swift-5.9.2-RELEASE-debian12.tar.gz -o swift.tar.gz \
     && tar -xzf swift.tar.gz --strip-components=1 -C /usr \
     && rm swift.tar.gz
 
-# 4. Instalar Go y Rust (Repositorios estándar y script oficial)
+# 4. Instalar Go y Rust
 RUN apt-get update && apt-get install -y golang-go
 RUN curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y
 ENV PATH="/root/.cargo/bin:${PATH}"
@@ -34,9 +32,13 @@ ENV PATH="/root/.cargo/bin:${PATH}"
 WORKDIR /app/services
 COPY ./services .
 
-# --- Aquí irían tus comandos de compilación (Ejemplos) ---
-# RUN cd rust_module && cargo build --release
-# RUN dotnet publish csharp_service -c Release -o ./bin
+# --- PREPARACIÓN DE SALIDA (Truco para evitar errores si no hay binarios aún) ---
+# Creamos la carpeta y un archivo oculto para que el COPY de abajo nunca falle
+RUN mkdir -p bin_outputs && touch bin_outputs/.gitkeep
+
+# --- Ejemplos de Compilación (Tus binarios reales irían aquí) ---
+# RUN cd rust_module && cargo build --release && cp target/release/mi_binario ../bin_outputs/
+# RUN dotnet publish csharp_service -c Release -o ../bin_outputs/
 
 # ==========================================
 # ETAPA 2: BUILD DEL FRONTEND (ASTRO)
@@ -53,8 +55,7 @@ RUN pnpm run build
 # ==========================================
 FROM php:8.3-fpm
 
-# Instalación de Runtimes y Repositorio de Microsoft para .NET Runtime
-# (Necesario para ejecutar lo que compilaste en la Etapa 1)
+# Runtimes necesarios
 RUN apt-get update && apt-get install -y wget gnupg \
     && wget https://packages.microsoft.com/config/debian/12/packages-microsoft-prod.deb -O packages-microsoft-prod.deb \
     && dpkg -i packages-microsoft-prod.deb \
@@ -66,7 +67,7 @@ RUN apt-get update && apt-get install -y wget gnupg \
     dotnet-runtime-8.0 \
     && rm -rf /var/lib/apt/lists/*
 
-# Extensiones PHP para PostgreSQL
+# Extensiones PHP
 RUN docker-php-ext-install pdo pdo_pgsql mbstring xml pcntl bcmath
 
 # Composer
@@ -78,12 +79,12 @@ WORKDIR /var/www
 COPY ./laravel .
 RUN composer install --no-interaction --optimize-autoloader --no-dev
 
-# 2. Frontend Astro (desde Etapa 2)
+# 2. Frontend Astro
 COPY --from=frontend-builder /app/frontend/dist ./public/app
 
-# 3. Binarios Compilados (desde Etapa 1)
-# IMPORTANTE: Asegúrate de que esta carpeta exista o comenta esta línea si aún no compilas nada
-COPY --from=multi-builder /app/services/bin_outputs/* ./bin/ || true
+# 3. Binarios Compilados (CORREGIDO)
+# Copiamos todo lo que haya en bin_outputs (incluido el .gitkeep si no hay nada más)
+COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 
 # Configuración Nginx y Supervisor
 COPY ./nginx.conf /etc/nginx/sites-available/default
