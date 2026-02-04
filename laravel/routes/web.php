@@ -7,63 +7,68 @@ use App\Http\Controllers\DashboardController;
 /**
  * WorkChain ERP - Web Routes
  * PHP 8.3 | Laravel 11
- * * SECURITY: NO hardcoded URLs - all redirects use environment variables
- * Routes redirect to frontend Astro app (separate from this API)
+ * * SECURITY: NO hardcoded URLs or localhost defaults.
+ * This file handles the API logic. The Frontend (Astro) handles the UI.
  */
 
-// Landing page - redirects to frontend home
+// Landing Page de la API
+// IMPORTANTE: Devolvemos JSON en lugar de redirigir para evitar el Bucle Infinito (Error 400)
 Route::get('/', function () {
-    // Se elimina el valor por defecto. Es OBLIGATORIO definir FRONTEND_URL en el .env
-    $frontendUrl = rtrim(env('FRONTEND_URL'), '/');
-    return redirect($frontendUrl . '/');
+    return response()->json([
+        'service' => 'WorkChain ERP API',
+        'status' => 'Running',
+        'message' => 'Access this application via the Frontend URL.',
+        'frontend_url' => env('FRONTEND_URL'), // Solo informativo
+        'timestamp' => now()->toIso8601String(),
+    ]);
 })->name('home');
 
-// Login route - redirects to frontend login page
-// This ensures users go to Astro frontend, not Laravel
+// Login Route (GET)
+// Si alguien intenta entrar a /login por navegador en la API, le decimos que vaya al Frontend.
 Route::get('/login', function () {
-    $frontendUrl = rtrim(env('FRONTEND_URL'), '/');
-    // Redirige estrictamente a la ruta definida en la variable de entorno
-    return redirect($frontendUrl . '/login');
+    return response()->json([
+        'message' => 'Authentication is handled via API (POST). Please use the Astro Frontend to login.',
+        'login_endpoint' => url('/api/auth/login')
+    ], 401);
 })->name('login');
 
-// Dashboard route - redirects to frontend dashboard
+// Dashboard Route (GET)
+// Solo informativo para evitar errores 404 si se accede directamente
 Route::get('/dashboard', function () {
-    $frontendUrl = rtrim(env('FRONTEND_URL'), '/');
-    return redirect($frontendUrl . '/dashboard');
+    return response()->json([
+        'message' => 'Dashboard is a frontend view. Please access via Astro App.'
+    ]);
 })->name('dashboard');
 
-// Rutas API de autenticación (estas se llaman desde Astro)
+// ===== RUTAS API DE AUTENTICACIÓN (Consumidas por Astro) =====
 Route::middleware(['api'])->prefix('api')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'apiLogin']);
     Route::post('/auth/logout', [AuthController::class, 'apiLogout']);
     Route::get('/auth/me', [AuthController::class, 'getUser']);
 });
 
-// Health checks
+// Health Checks (Para monitoreo de Koyeb)
 Route::get('/health', function () {
     return response()->json([
         'status' => 'OK',
         'service' => 'WorkChain ERP Web',
+        'environment' => app()->environment(),
         'timestamp' => now()->toIso8601String(),
-        'version' => app()->version(),
     ]);
 })->name('health');
 
-// Health check simple response for Koyeb monitoring
 Route::get('/health/simple', function () {
     return response()->text('OK');
 });
 
-// Rutas protegidas por autenticación
-// NOTA: Estas rutas manejan la lógica interna, pero si la UI está en Astro,
-// Astro debe consumir la API, no estas rutas web directamente, a menos que sean híbridas.
-Route::middleware(['auth'])->group(function () {
+// ===== RUTAS PROTEGIDAS (LOGICA INTERNA) =====
+Route::middleware(['auth:sanctum'])->group(function () {
     
     // Logout
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     
-    // Dashboard Principal
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // Dashboard Data
+    Route::get('/dashboard-data', [DashboardController::class, 'index'])->name('dashboard.data');
     
     // ===== MÓDULO INVENTARIO =====
     Route::prefix('inventory')->name('inventory.')->group(function () {
