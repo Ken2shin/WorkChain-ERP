@@ -49,6 +49,7 @@ WORKDIR /app/frontend
 COPY ./frontend/package.json ./frontend/pnpm-lock.yaml* ./
 RUN pnpm install
 COPY ./frontend .
+# Esto generará la carpeta /app/frontend/dist gracias al cambio en astro.config.mjs
 RUN pnpm run build
 
 # ==========================================
@@ -81,15 +82,16 @@ COPY ./laravel .
 RUN composer install --no-interaction --optimize-autoloader --no-dev --no-scripts
 
 # 5. Frontend y Binarios
-COPY --from=frontend-builder /app/frontend/dist ./public/app
+# CORRECCIÓN CRÍTICA: Copiamos 'dist' DIRECTAMENTE a './public'
+# Esto coloca el index.html donde Laravel lo espera.
+COPY --from=frontend-builder /app/frontend/dist ./public
 COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 
 # 6. Configuración de Servidor
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/worker.conf
 
-# 7. CORRECCIÓN FINAL: Crear carpetas faltantes antes de asignar permisos
-#    Git ignora estas carpetas, por eso fallaba el chown. Las creamos a mano:
+# 7. Crear carpetas faltantes antes de asignar permisos
 RUN mkdir -p /var/www/storage/framework/sessions \
     /var/www/storage/framework/views \
     /var/www/storage/framework/cache \

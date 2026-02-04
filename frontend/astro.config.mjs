@@ -3,34 +3,31 @@ import alpinejs from '@astrojs/alpinejs';
 import tailwind from '@astrojs/tailwind';
 
 export default defineConfig({
-  // 1. CAMBIO CRÍTICO: Usamos 'static' para generar archivos HTML/CSS/JS reales.
-  // Esto permite que Laravel sirva el frontend sin necesitar un servidor Node.js aparte.
+  // 1. Mantenemos 'static' para generar HTML real (Necesario para Laravel)
   output: 'static',
 
-  // 2. LA MAGIA: Enviamos el resultado directamente a la carpeta pública de Laravel.
-  // Cuando ejecutes 'npm run build', los archivos aparecerán en tu backend.
-  outDir: '../laravel/public',
+  // 2. CORRECCIÓN: Eliminamos 'outDir' para que Astro genere la carpeta 'dist' por defecto.
+  // Esto permite que Docker encuentre los archivos en la etapa de copia.
   
-  // 3. ORGANIZACIÓN: Guardamos los assets en una subcarpeta para no ensuciar el public de Laravel
+  // 3. ORGANIZACIÓN: Guardamos los assets en una subcarpeta
   build: {
     assets: '_astro',
   },
 
-  // 4. SEGURIDAD: No borramos la carpeta public entera (para no borrar index.php de Laravel)
+  // 4. SEGURIDAD
   emptyOutDir: false,
 
-  // 5. INTEGRACIONES
+  // 5. INTEGRACIONES (Tus originales)
   integrations: [
     alpinejs(),
     tailwind({
-      applyBaseStyles: true, // true es mejor para asegurar estilos base consistentes
+      applyBaseStyles: true,
     })
   ],
 
   // 6. SEGURIDAD & VITE
   vite: {
     build: {
-      // Optimizaciones para producción
       minify: 'esbuild',
       cssMinify: true,
     },
