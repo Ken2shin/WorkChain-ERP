@@ -36,7 +36,7 @@ return [
      */
     'anomaly_detection' => [
         'enabled' => env('ANOMALY_DETECTION_ENABLED', true),
-        'service_url' => env('ANOMALY_SERVICE_URL', 'http://localhost:3001'),
+        'service_url' => env('ANOMALY_SERVICE_URL'),
         
         // Scoring thresholds
         'thresholds' => [
@@ -65,7 +65,7 @@ return [
      * Cryptography Service Configuration
      */
     'crypto' => [
-        'service_url' => env('CRYPTO_SERVICE_URL', 'http://localhost:3000'),
+        'service_url' => env('CRYPTO_SERVICE_URL'),
         
         // Hash algorithms
         'password_algorithm' => env('PASSWORD_ALGORITHM', 'argon2'),
@@ -87,13 +87,13 @@ return [
     /**
      * Allowed Hosts (CSRF/Host header validation)
      */
-    'allowed_hosts' => explode(',', env('ALLOWED_HOSTS', 'localhost,127.0.0.1')),
+    'allowed_hosts' => explode(',', env('ALLOWED_HOSTS', 'workchain.local')),
 
     /**
      * CORS Configuration
      */
     'cors' => [
-        'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'http://localhost:3002')),
+        'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'https://workchain.local')),
         'allowed_methods' => ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         'allowed_headers' => ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Requested-With'],
         'expose_headers' => ['X-RateLimit-Limit', 'X-RateLimit-Remaining'],

@@ -125,7 +125,7 @@ const { title = 'WorkChain ERP', description = 'Professional ERP for SMEs' } = A
       }
     </style>
   </head>
-  <body x-data="appState()">
+  <body x-data="appState()" @load="window.validateSecurityAtStartup?.()">
     <!-- Loader -->
     <div
       x-show="loading"
@@ -174,7 +174,7 @@ const { title = 'WorkChain ERP', description = 'Professional ERP for SMEs' } = A
 
     <script
       define:vars={{
-        apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api',
+        apiBase: import.meta.env.PUBLIC_API_BASE || '/api',
       }}
     >
       window.API_BASE = apiBase;

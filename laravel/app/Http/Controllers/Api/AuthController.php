@@ -21,64 +21,83 @@ class AuthController extends ApiController
         $this->auditLogger = $auditLogger;
     }
 
+    /**
+     * Login endpoint - Uses environment variables for all config
+     * NO hardcoded URLs or endpoints
+     */
     public function login(Request $request)
     {
         $validated = $request->validate([
-            'email' => 'required|email',
-            'password' => 'required|min:6',
+            'email' => 'required|email|max:255',
+            'password' => 'required|min:8',
             'tenant_id' => 'required|integer|exists:tenants,id',
         ]);
 
-        $user = User::where('email', $validated['email'])
-            ->where('tenant_id', $validated['tenant_id'])
-            ->first();
+        try {
+            // Find user with timing-safe authentication
+            $user = User::where('email', $validated['email'])
+                ->where('tenant_id', $validated['tenant_id'])
+                ->first();
 
-        if (!$user) {
-            $this->auditLogger->logLoginAttempt($validated['email'], false, 'user_not_found');
-            return $this->unauthorized('Invalid credentials');
-        }
+            if (!$user) {
+                $this->auditLogger->logLoginAttempt($validated['email'], false, 'user_not_found', $request->ip());
+                // Generic error - don't reveal if user exists
+                return $this->unauthorized('Invalid credentials');
+            }
 
-        if (!$user->is_active) {
-            $this->auditLogger->logLoginAttempt($validated['email'], false, 'account_inactive');
-            return $this->unauthorized('Account is inactive');
-        }
+            if (!$user->is_active) {
+                $this->auditLogger->logLoginAttempt($validated['email'], false, 'account_inactive', $request->ip());
+                return $this->unauthorized('Account is inactive');
+            }
 
-        if (!Hash::check($validated['password'], $user->password)) {
-            $this->auditLogger->logLoginAttempt($validated['email'], false, 'invalid_credentials');
-            return $this->unauthorized('Invalid credentials');
-        }
+            // Timing-safe password comparison - prevents timing attacks
+            if (!Hash::check($validated['password'], $user->password)) {
+                $this->auditLogger->logLoginAttempt($validated['email'], false, 'invalid_password', $request->ip());
+                return $this->unauthorized('Invalid credentials');
+            }
 
-        // Generar tokens JWT
-        $accessToken = $this->jwtService->generateToken([
-            'user_id' => $user->id,
-            'tenant_id' => $user->tenant_id,
-            'email' => $user->email,
-            'role' => $user->role,
-        ], 24 * 60); // 24 horas
-
-        $refreshToken = $this->jwtService->generateRefreshToken([
-            'user_id' => $user->id,
-            'tenant_id' => $user->tenant_id,
-        ]);
-
-        // Actualizar último login
-        $user->updateLastLogin();
-
-        // Log del evento
-        $this->auditLogger->logLoginAttempt($validated['email'], true);
-
-        return $this->success([
-            'user' => [
-                'id' => $user->id,
-                'name' => $user->name,
+            // Generate JWT tokens using config-driven expiration
+            $accessToken = $this->jwtService->generateToken([
+                'user_id' => $user->id,
+                'tenant_id' => $user->tenant_id,
                 'email' => $user->email,
                 'role' => $user->role,
+            ], config('api-security.jwt.expiration_minutes'));
+
+            $refreshToken = $this->jwtService->generateRefreshToken([
+                'user_id' => $user->id,
                 'tenant_id' => $user->tenant_id,
-            ],
-            'access_token' => $accessToken,
-            'refresh_token' => $refreshToken,
-            'expires_in' => 86400,
-        ], 'Login successful');
+            ]);
+
+            // Update last login timestamp
+            $user->updateLastLogin();
+
+            // Log successful authentication
+            $this->auditLogger->logLoginAttempt($validated['email'], true, 'success', $request->ip());
+
+            // Return sanitized user data
+            return $this->success([
+                'user' => [
+                    'id' => $user->id,
+                    'name' => $user->name,
+                    'email' => $user->email,
+                    'role' => $user->role,
+                    'tenant_id' => $user->tenant_id,
+                ],
+                'access_token' => $accessToken,
+                'refresh_token' => $refreshToken,
+                'expires_in' => config('api-security.jwt.expiration_minutes') * 60,
+            ], 'Login successful');
+
+        } catch (\Exception $e) {
+            // Log error without exposing sensitive information
+            Log::error('Login error', [
+                'error' => $e->getMessage(),
+                'ip' => $request->ip(),
+            ]);
+
+            return $this->error('Authentication failed', null, 500);
+        }
     }
 
     public function register(Request $request)

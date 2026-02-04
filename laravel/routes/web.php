@@ -16,11 +16,11 @@ Route::get('/', function () {
 
 // Redirecciona al frontend Astro para login y dashboard
 Route::get('/login', function () {
-    return redirect(env('FRONTEND_URL', 'http://localhost:3002') . '/login');
+    return redirect(env('FRONTEND_URL') . '/login');
 })->name('login');
 
 Route::get('/dashboard', function () {
-    return redirect(env('FRONTEND_URL', 'http://localhost:3002') . '/dashboard');
+    return redirect(env('FRONTEND_URL') . '/dashboard');
 })->name('dashboard');
 
 // Rutas API de autenticación (estas se llaman desde Astro)
