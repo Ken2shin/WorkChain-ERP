@@ -171,12 +171,12 @@
 
             <!-- CTA Buttons -->
             <div class="flex flex-col sm:flex-row gap-4 justify-center">
-                <a href="/api/v1/health" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors flex items-center justify-center gap-2">
-                    <span>Check API Status</span>
+                <a href="/login" class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition-colors flex items-center justify-center gap-2 transform hover:scale-105">
+                    <span>Acceder al Sistema</span>
                     <span>→</span>
                 </a>
-                <a href="/health" class="border border-blue-400 text-blue-300 hover:bg-blue-900/20 font-semibold py-3 px-8 rounded-lg transition-colors">
-                    Health Check
+                <a href="/api/v1/health" class="border border-blue-400 text-blue-300 hover:bg-blue-900/20 font-semibold py-3 px-8 rounded-lg transition-colors">
+                    Ver Estado API
                 </a>
             </div>
 
@@ -194,12 +194,7 @@
 
     <!-- Alpine.js for interactivity (lightweight) -->
     <script defer src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js"></script>
-    <script>
-        document.addEventListener('DOMContentLoaded', function() {
-            console.log('[v0] WorkChain ERP loaded successfully');
-            console.log('[v0] Laravel version: ' + '{{ config("app.version", "11") }}');
-            console.log('[v0] PHP version: PHP 8.3');
-        });
+    
     </script>
 </body>
 </html>
