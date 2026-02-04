@@ -7,20 +7,29 @@ use App\Http\Controllers\DashboardController;
 /**
  * WorkChain ERP - Web Routes
  * PHP 8.3 | Laravel 11
+ * * SECURITY: NO hardcoded URLs - all redirects use environment variables
+ * Routes redirect to frontend Astro app (separate from this API)
  */
 
-// Landing page - muestra bienvenida con botón de login
+// Landing page - redirects to frontend home
 Route::get('/', function () {
-    return view('welcome');
+    // Se elimina el valor por defecto. Es OBLIGATORIO definir FRONTEND_URL en el .env
+    $frontendUrl = rtrim(env('FRONTEND_URL'), '/');
+    return redirect($frontendUrl . '/');
 })->name('home');
 
-// Redirecciona al frontend Astro para login y dashboard
+// Login route - redirects to frontend login page
+// This ensures users go to Astro frontend, not Laravel
 Route::get('/login', function () {
-    return redirect(env('FRONTEND_URL') . '/login');
+    $frontendUrl = rtrim(env('FRONTEND_URL'), '/');
+    // Redirige estrictamente a la ruta definida en la variable de entorno
+    return redirect($frontendUrl . '/login');
 })->name('login');
 
+// Dashboard route - redirects to frontend dashboard
 Route::get('/dashboard', function () {
-    return redirect(env('FRONTEND_URL') . '/dashboard');
+    $frontendUrl = rtrim(env('FRONTEND_URL'), '/');
+    return redirect($frontendUrl . '/dashboard');
 })->name('dashboard');
 
 // Rutas API de autenticación (estas se llaman desde Astro)
@@ -46,6 +55,8 @@ Route::get('/health/simple', function () {
 });
 
 // Rutas protegidas por autenticación
+// NOTA: Estas rutas manejan la lógica interna, pero si la UI está en Astro,
+// Astro debe consumir la API, no estas rutas web directamente, a menos que sean híbridas.
 Route::middleware(['auth'])->group(function () {
     
     // Logout

@@ -1,0 +1,157 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+const features = [
+  {
+    icon: '🔒',
+    title: 'Secure',
+    description: 'Multi-tenant architecture with encryption'
+  },
+  {
+    icon: '⚡',
+    title: 'Fast',
+    description: 'Optimized performance with caching'
+  },
+  {
+    icon: '🧩',
+    title: 'Modular',
+    description: '8 integrated business modules'
+  }
+];
+
+const modules = [
+  'Warehouse Inventory',
+  'Purchasing',
+  'Project Management',
+  'Financial Management',
+  'Sales Management',
+  'Human Resources',
+  'Logistics',
+  'Document Control'
+];
+
+const apiEndpoints = [
+  { method: 'GET', path: '/api/v1/health', description: 'Health check' },
+  { method: 'POST', path: '/api/v1/auth/login', description: 'User authentication' },
+  { method: 'GET', path: '/health', description: 'Web health endpoint' }
+];
+---
+
+<Layout title="WorkChain ERP - Home">
+  <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
+    <!-- Navigation Bar -->
+    <nav class="border-b border-slate-700 bg-slate-900/50 backdrop-blur sticky top-0 z-10">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+          <div class="flex items-center space-x-3">
+            <div class="w-10 h-10 bg-blue-500 rounded-lg flex items-center justify-center">
+              <span class="text-lg font-bold">⚙️</span>
+            </div>
+            <h1 class="text-2xl font-bold text-blue-400">WorkChain ERP</h1>
+          </div>
+          <div class="space-x-4">
+            <a href="/login" class="px-4 py-2 text-gray-300 hover:text-white transition">Login</a>
+            <a href="/dashboard" class="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg transition">Dashboard</a>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="py-20 px-4">
+      <div class="max-w-7xl mx-auto text-center">
+        <h2 class="text-5xl font-bold mb-6">
+          Enterprise Resource Planning System
+        </h2>
+        <p class="text-xl text-gray-400 mb-8">
+          Manage your entire business with WorkChain ERP
+        </p>
+        <div class="flex gap-4 justify-center">
+          <button 
+            onclick="window.location.href='/login'"
+            class="px-8 py-3 bg-blue-600 hover:bg-blue-700 rounded-lg font-semibold transition transform hover:scale-105"
+          >
+            Acceder al Sistema →
+          </button>
+          <a 
+            href="#api-endpoints" 
+            class="px-8 py-3 border border-blue-500 hover:bg-blue-500/10 rounded-lg font-semibold transition"
+          >
+            Ver Estado API
+          </a>
+        </div>
+
+        <!-- Status Badge -->
+        <div class="mt-8 inline-block">
+          <div class="flex items-center gap-2 px-4 py-2 bg-green-500/20 border border-green-500/50 rounded-full">
+            <span class="w-2 h-2 bg-green-500 rounded-full animate-pulse"></span>
+            <span class="text-green-300">System Online</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Info Section -->
+    <section class="py-16 px-4 bg-slate-800/50">
+      <div class="max-w-7xl mx-auto">
+        <div class="grid grid-cols-1 md:grid-cols-3 gap-8">
+          {features.map(feature => (
+            <div class="p-6 bg-slate-700/50 rounded-xl border border-slate-600 hover:border-blue-500/50 transition">
+              <div class="text-4xl mb-4">{feature.icon}</div>
+              <h3 class="text-xl font-bold mb-2">{feature.title}</h3>
+              <p class="text-gray-400">{feature.description}</p>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Modules Section -->
+    <section class="py-16 px-4">
+      <div class="max-w-7xl mx-auto">
+        <h3 class="text-3xl font-bold mb-8 text-center">Available Modules</h3>
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {modules.map(module => (
+            <div class="p-4 bg-slate-700/50 rounded-lg border border-slate-600 flex items-center gap-3">
+              <span class="text-green-400">✓</span>
+              <span>{module}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- API Endpoints Section -->
+    <section id="api-endpoints" class="py-16 px-4 bg-slate-800/50">
+      <div class="max-w-7xl mx-auto">
+        <h3 class="text-3xl font-bold mb-8 text-center">API Endpoints</h3>
+        <div class="bg-slate-700/50 rounded-xl border border-slate-600 p-6 space-y-4">
+          {apiEndpoints.map(endpoint => (
+            <div class="flex items-center gap-4 pb-4 border-b border-slate-600 last:border-0">
+              <span class="px-3 py-1 bg-blue-600/20 text-blue-400 rounded font-mono text-sm">
+                {endpoint.method}
+              </span>
+              <span class="font-mono text-gray-300">{endpoint.path}</span>
+              <span class="text-gray-500 ml-auto">{endpoint.description}</span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="border-t border-slate-700 py-8 px-4">
+      <div class="max-w-7xl mx-auto text-center text-gray-400">
+        <p>WorkChain ERP v1.0.0 • PHP 8.3 • Laravel 11 • Powered by Vercel</p>
+      </div>
+    </footer>
+  </div>
+
+  <script>
+    // Log API base URL on load (for debugging)
+    document.addEventListener('DOMContentLoaded', () => {
+      console.log('[v0] API Base URL:', window.API_BASE || 'Not configured');
+      console.log('[v0] Frontend loaded successfully');
+    });
+  </script>
+</Layout>
