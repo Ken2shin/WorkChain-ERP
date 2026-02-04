@@ -1,74 +1,48 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Illuminate\Support\Facades\File;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 
 /**
  * WorkChain ERP - Web Routes
  * PHP 8.3 | Laravel 11
- * * SECURITY: NO hardcoded URLs or localhost defaults.
- * This file handles the API logic. The Frontend (Astro) handles the UI.
+ * * ESTRATEGIA: 
+ * 1. Definimos rutas de API y Controladores primero.
+ * 2. Usamos Route::fallback() al final para cargar el Frontend (Astro).
+ * 3. CERO redirecciones para evitar el Error 400.
  */
 
-// Landing Page de la API
-// IMPORTANTE: Devolvemos JSON en lugar de redirigir para evitar el Bucle Infinito (Error 400)
-Route::get('/', function () {
-    return response()->json([
-        'service' => 'WorkChain ERP API',
-        'status' => 'Running',
-        'message' => 'Access this application via the Frontend URL.',
-        'frontend_url' => env('FRONTEND_URL'), // Solo informativo
-        'timestamp' => now()->toIso8601String(),
-    ]);
-})->name('home');
-
-// Login Route (GET)
-// Si alguien intenta entrar a /login por navegador en la API, le decimos que vaya al Frontend.
-Route::get('/login', function () {
-    return response()->json([
-        'message' => 'Authentication is handled via API (POST). Please use the Astro Frontend to login.',
-        'login_endpoint' => url('/api/auth/login')
-    ], 401);
-})->name('login');
-
-// Dashboard Route (GET)
-// Solo informativo para evitar errores 404 si se accede directamente
-Route::get('/dashboard', function () {
-    return response()->json([
-        'message' => 'Dashboard is a frontend view. Please access via Astro App.'
-    ]);
-})->name('dashboard');
-
-// ===== RUTAS API DE AUTENTICACIÓN (Consumidas por Astro) =====
+// ====================================================
+// 1. RUTAS API (Prioridad Alta)
+// ====================================================
 Route::middleware(['api'])->prefix('api')->group(function () {
     Route::post('/auth/login', [AuthController::class, 'apiLogin']);
     Route::post('/auth/logout', [AuthController::class, 'apiLogout']);
     Route::get('/auth/me', [AuthController::class, 'getUser']);
+    
+    // Health Check
+    Route::get('/health', function () {
+        return response()->json(['status' => 'OK', 'service' => 'WorkChain API']);
+    });
 });
 
-// Health Checks (Para monitoreo de Koyeb)
-Route::get('/health', function () {
-    return response()->json([
-        'status' => 'OK',
-        'service' => 'WorkChain ERP Web',
-        'environment' => app()->environment(),
-        'timestamp' => now()->toIso8601String(),
-    ]);
-})->name('health');
-
+// Health check simple para Koyeb
 Route::get('/health/simple', function () {
     return response()->text('OK');
 });
 
-// ===== RUTAS PROTEGIDAS (LOGICA INTERNA) =====
+// ====================================================
+// 2. RUTAS PROTEGIDAS (Tu Lógica de Negocio Original)
+// ====================================================
 Route::middleware(['auth:sanctum'])->group(function () {
     
-    // Logout
+    // Logout Web
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     
-    // Dashboard Data
-    Route::get('/dashboard-data', [DashboardController::class, 'index'])->name('dashboard.data');
+    // Dashboard Principal
+    Route::get('/dashboard-data', [DashboardController::class, 'index'])->name('dashboard');
     
     // ===== MÓDULO INVENTARIO =====
     Route::prefix('inventory')->name('inventory.')->group(function () {
@@ -139,4 +113,27 @@ Route::middleware(['auth:sanctum'])->group(function () {
         Route::get('/profile', [DashboardController::class, 'settingsProfile'])->name('profile');
         Route::get('/security', [DashboardController::class, 'settingsSecurity'])->name('security');
     });
+});
+
+// ====================================================
+// 3. FRONTEND FALLBACK (Sirve tu Index.astro compilado)
+// ====================================================
+// Esta lógica captura cualquier ruta que NO sea API ni de módulos
+// y muestra la interfaz de Astro.
+
+Route::fallback(function () {
+    // Ruta al archivo compilado por Astro
+    $path = public_path('index.html');
+
+    // Si existe (ya corriste npm run build), lo mostramos.
+    if (File::exists($path)) {
+        return File::get($path);
+    }
+
+    // Si no existe, damos un mensaje claro sin redirecciones.
+    return response()->json([
+        'error' => 'Frontend not found',
+        'message' => 'Please run "npm run build" in the frontend directory.',
+        'path_checked' => $path
+    ], 200);
 });
