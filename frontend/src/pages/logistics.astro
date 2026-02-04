@@ -1,0 +1,108 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="WorkChain ERP - Logistics Management">
+  <div class="min-h-screen bg-slate-900 text-white">
+    <nav class="bg-slate-800 border-b border-slate-700">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+        <div>
+          <h1 class="text-2xl font-bold">Logistics Management</h1>
+          <p class="text-slate-400 text-sm">🚚 Shipments, routes & tracking</p>
+        </div>
+        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">Back</a>
+      </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div class="bg-cyan-500 hover:bg-cyan-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Shipments</h3>
+          <p class="text-sm opacity-90">Track shipments</p>
+        </div>
+        <div class="bg-sky-500 hover:bg-sky-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Routes</h3>
+          <p class="text-sm opacity-90">Delivery routes</p>
+        </div>
+        <div class="bg-teal-500 hover:bg-teal-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Tracking</h3>
+          <p class="text-sm opacity-90">GPS tracking</p>
+        </div>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
+        <h2 class="text-2xl font-bold mb-6">Active Shipments</h2>
+        <div class="space-y-4">
+          <div class="p-4 bg-slate-700/50 rounded-lg">
+            <div class="flex justify-between mb-2">
+              <div>
+                <p class="font-bold">SHP-2024-001</p>
+                <p class="text-slate-400 text-sm">To: New York, NY</p>
+              </div>
+              <span class="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">In Transit</span>
+            </div>
+            <div class="w-full bg-slate-600 rounded-full h-2">
+              <div class="bg-green-500 h-2 rounded-full" style="width: 65%"></div>
+            </div>
+          </div>
+          <div class="p-4 bg-slate-700/50 rounded-lg">
+            <div class="flex justify-between mb-2">
+              <div>
+                <p class="font-bold">SHP-2024-002</p>
+                <p class="text-slate-400 text-sm">To: Los Angeles, CA</p>
+              </div>
+              <span class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">Pending</span>
+            </div>
+            <div class="w-full bg-slate-600 rounded-full h-2">
+              <div class="bg-blue-500 h-2 rounded-full" style="width: 10%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Total Shipments</p>
+          <p class="text-3xl font-bold text-cyan-400">1,234</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">In Transit</p>
+          <p class="text-3xl font-bold text-green-400">45</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Delivered</p>
+          <p class="text-3xl font-bold text-blue-400">1,156</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Avg Delivery Time</p>
+          <p class="text-3xl font-bold text-orange-400">2.1 days</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
+    function moduleState() {
+      return {
+        async init() {
+          await this.verifySession();
+        },
+        async verifySession() {
+          try {
+            const response = await fetch(apiBase + '/auth/me', {
+              credentials: 'include',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (response.status === 401 || response.status === 403) {
+              window.location.href = '/login';
+            }
+          } catch (err) {
+            console.error('[v0] Session check failed:', err);
+            window.location.href = '/login';
+          }
+        }
+      };
+    }
+    document.addEventListener('DOMContentLoaded', async () => {
+      const state = moduleState();
+      await state.init();
+    });
+  </script>
+</Layout>

@@ -1,0 +1,111 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="WorkChain ERP - Finance Management">
+  <div class="min-h-screen bg-slate-900 text-white">
+    <nav class="bg-slate-800 border-b border-slate-700">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+        <div>
+          <h1 class="text-2xl font-bold">Finance Management</h1>
+          <p class="text-slate-400 text-sm">💳 Accounts, reports & budgets</p>
+        </div>
+        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">Back</a>
+      </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div class="bg-indigo-500 hover:bg-indigo-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Accounts</h3>
+          <p class="text-sm opacity-90">General ledger</p>
+        </div>
+        <div class="bg-violet-500 hover:bg-violet-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Reports</h3>
+          <p class="text-sm opacity-90">Financial reports</p>
+        </div>
+        <div class="bg-fuchsia-500 hover:bg-fuchsia-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Budgets</h3>
+          <p class="text-sm opacity-90">Budget planning</p>
+        </div>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
+        <h2 class="text-2xl font-bold mb-6">Financial Summary</h2>
+        <div class="space-y-4">
+          <div class="flex justify-between p-4 bg-slate-700/50 rounded-lg">
+            <div>
+              <p class="text-slate-400 text-sm">Total Revenue (YTD)</p>
+              <p class="text-2xl font-bold">$2,450,000</p>
+            </div>
+            <div class="text-right">
+              <p class="text-green-400 font-bold">↑ 12.5%</p>
+            </div>
+          </div>
+          <div class="flex justify-between p-4 bg-slate-700/50 rounded-lg">
+            <div>
+              <p class="text-slate-400 text-sm">Total Expenses (YTD)</p>
+              <p class="text-2xl font-bold">$1,850,000</p>
+            </div>
+            <div class="text-right">
+              <p class="text-red-400 font-bold">↑ 8.3%</p>
+            </div>
+          </div>
+          <div class="flex justify-between p-4 bg-slate-700/50 rounded-lg">
+            <div>
+              <p class="text-slate-400 text-sm">Net Profit (YTD)</p>
+              <p class="text-2xl font-bold">$600,000</p>
+            </div>
+            <div class="text-right">
+              <p class="text-green-400 font-bold">↑ 24.5%</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Cash Position</p>
+          <p class="text-3xl font-bold text-green-400">$845.2K</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Accounts Payable</p>
+          <p class="text-3xl font-bold text-red-400">$342.5K</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Accounts Receivable</p>
+          <p class="text-3xl font-bold text-blue-400">$527.8K</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Profit Margin</p>
+          <p class="text-3xl font-bold text-purple-400">24.5%</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
+    function moduleState() {
+      return {
+        async init() {
+          await this.verifySession();
+        },
+        async verifySession() {
+          try {
+            const response = await fetch(apiBase + '/auth/me', {
+              credentials: 'include',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (response.status === 401 || response.status === 403) {
+              window.location.href = '/login';
+            }
+          } catch (err) {
+            console.error('[v0] Session check failed:', err);
+            window.location.href = '/login';
+          }
+        }
+      };
+    }
+    document.addEventListener('DOMContentLoaded', async () => {
+      const state = moduleState();
+      await state.init();
+    });
+  </script>
+</Layout>

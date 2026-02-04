@@ -1,0 +1,150 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="WorkChain ERP - Inventory Management">
+  <div class="min-h-screen bg-slate-900 text-white">
+    <!-- Header -->
+    <nav class="bg-slate-800 border-b border-slate-700">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+        <div>
+          <h1 class="text-2xl font-bold">Inventory Management</h1>
+          <p class="text-slate-400 text-sm">📦 Manage warehouses, products and stock</p>
+        </div>
+        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+          Back to Dashboard
+        </a>
+      </div>
+    </nav>
+
+    <!-- Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <!-- Navigation Cards -->
+        <a href="/inventory" class="bg-blue-500 hover:bg-blue-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Dashboard</h3>
+          <p class="text-sm opacity-90">View inventory overview and statistics</p>
+        </a>
+        <a href="/inventory" class="bg-purple-500 hover:bg-purple-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Warehouses</h3>
+          <p class="text-sm opacity-90">Manage warehouse locations and capacity</p>
+        </a>
+        <a href="/inventory" class="bg-green-500 hover:bg-green-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Products</h3>
+          <p class="text-sm opacity-90">View and edit product catalog</p>
+        </a>
+      </div>
+
+      <!-- Data Section -->
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
+        <h2 class="text-2xl font-bold mb-6">Stock Levels</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead class="border-b border-slate-700">
+              <tr>
+                <th class="px-4 py-3 text-slate-300">Product ID</th>
+                <th class="px-4 py-3 text-slate-300">Product Name</th>
+                <th class="px-4 py-3 text-slate-300">Warehouse</th>
+                <th class="px-4 py-3 text-slate-300">Current Stock</th>
+                <th class="px-4 py-3 text-slate-300">Min Level</th>
+                <th class="px-4 py-3 text-slate-300">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-slate-700 hover:bg-slate-700/50">
+                <td class="px-4 py-3">INV-001</td>
+                <td class="px-4 py-3 text-blue-300">Widget A</td>
+                <td class="px-4 py-3">Main Warehouse</td>
+                <td class="px-4 py-3 font-bold">450</td>
+                <td class="px-4 py-3">100</td>
+                <td class="px-4 py-3"><span class="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">In Stock</span></td>
+              </tr>
+              <tr class="border-b border-slate-700 hover:bg-slate-700/50">
+                <td class="px-4 py-3">INV-002</td>
+                <td class="px-4 py-3 text-blue-300">Widget B</td>
+                <td class="px-4 py-3">Distribution Center</td>
+                <td class="px-4 py-3 font-bold">25</td>
+                <td class="px-4 py-3">50</td>
+                <td class="px-4 py-3"><span class="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs">Low Stock</span></td>
+              </tr>
+              <tr class="border-b border-slate-700 hover:bg-slate-700/50">
+                <td class="px-4 py-3">INV-003</td>
+                <td class="px-4 py-3 text-blue-300">Component X</td>
+                <td class="px-4 py-3">Main Warehouse</td>
+                <td class="px-4 py-3 font-bold">0</td>
+                <td class="px-4 py-3">200</td>
+                <td class="px-4 py-3"><span class="px-3 py-1 bg-red-500/20 text-red-300 rounded-full text-xs">Out of Stock</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Total Products</p>
+          <p class="text-3xl font-bold text-blue-400">1,234</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Warehouses</p>
+          <p class="text-3xl font-bold text-green-400">8</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Low Stock Items</p>
+          <p class="text-3xl font-bold text-yellow-400">42</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Out of Stock</p>
+          <p class="text-3xl font-bold text-red-400">3</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
+    function moduleState() {
+      return {
+        loading: true,
+        error: null,
+        data: [],
+
+        async init() {
+          await this.loadData();
+        },
+
+        // Load data with HTTP-only cookie session
+        // Token is encrypted on server, never exposed to client
+        async loadData() {
+          try {
+            const response = await fetch(apiBase + '/inventory/data', {
+              method: 'GET',
+              credentials: 'include', // Send HTTP-only session cookie
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+
+            if (response.ok) {
+              this.data = await response.json();
+            } else if (response.status === 401 || response.status === 403) {
+              window.location.href = '/login';
+            } else {
+              this.error = 'Failed to load inventory data';
+            }
+          } catch (err) {
+            console.error('[v0] Inventory load error:', err);
+            this.error = 'Connection error';
+          } finally {
+            this.loading = false;
+          }
+        }
+      };
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const state = moduleState();
+      await state.init();
+    });
+  </script>
+</Layout>

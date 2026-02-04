@@ -1,0 +1,243 @@
+---
+import Layout from '../layouts/Layout.astro';
+
+// Module configuration
+const modules = [
+  {
+    id: 'inventory',
+    name: 'Inventory',
+    description: 'Manage warehouses, products & stock',
+    icon: '📦',
+    color: 'blue',
+    url: '/inventory'
+  },
+  {
+    id: 'sales',
+    name: 'Sales',
+    description: 'Orders, customers & invoices',
+    icon: '💰',
+    color: 'green',
+    url: '/sales'
+  },
+  {
+    id: 'purchases',
+    name: 'Purchases',
+    description: 'Suppliers, POs & requisitions',
+    icon: '🛒',
+    color: 'purple',
+    url: '/purchases'
+  },
+  {
+    id: 'hr',
+    name: 'Human Resources',
+    description: 'Employees, payroll & attendance',
+    icon: '👥',
+    color: 'red',
+    url: '/hr'
+  },
+  {
+    id: 'projects',
+    name: 'Projects',
+    description: 'Tasks, timeline & resources',
+    icon: '📋',
+    color: 'orange',
+    url: '/projects'
+  },
+  {
+    id: 'logistics',
+    name: 'Logistics',
+    description: 'Shipments, routes & tracking',
+    icon: '🚚',
+    color: 'cyan',
+    url: '/logistics'
+  },
+  {
+    id: 'finance',
+    name: 'Finance',
+    description: 'Accounts, reports & budgets',
+    icon: '💳',
+    color: 'indigo',
+    url: '/finance'
+  },
+  {
+    id: 'documents',
+    name: 'Documents',
+    description: 'Files & compliance',
+    icon: '📄',
+    color: 'slate',
+    url: '/documents'
+  }
+];
+---
+
+<Layout title="WorkChain ERP - Dashboard">
+  <div class="min-h-screen bg-slate-900 text-white">
+    <!-- Header/Navbar -->
+    <nav class="bg-slate-800 border-b border-slate-700" x-data="navState()">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+        <div class="flex justify-between items-center h-16">
+          <!-- Logo -->
+          <div class="flex items-center space-x-3">
+            <span class="text-2xl font-bold text-blue-400">WorkChain</span>
+            <span class="text-sm text-slate-400">ERP Dashboard</span>
+          </div>
+
+          <!-- User Menu -->
+          <div class="flex items-center space-x-4">
+            <div class="text-sm">
+              <p class="text-white" x-text="user?.name || 'User'"></p>
+              <p class="text-slate-400 text-xs" x-text="user?.email || 'loading...'"></p>
+            </div>
+            <button
+              @click="logout()"
+              class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm transition-colors"
+            >
+              Logout
+            </button>
+          </div>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <!-- Welcome Section -->
+      <div class="mb-12">
+        <h1 class="text-4xl font-bold mb-2">Welcome to WorkChain ERP</h1>
+        <p class="text-slate-400 text-lg">Manage all your business operations from one place</p>
+      </div>
+
+      <!-- Modules Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+        {modules.map((module) => (
+          <a
+            href={module.url}
+            class={`group relative bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-${module.color}-500 rounded-xl p-6 transition-all duration-300 transform hover:scale-105 cursor-pointer overflow-hidden`}
+          >
+            <!-- Background gradient on hover -->
+            <div
+              class={`absolute inset-0 bg-gradient-to-br from-${module.color}-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
+            ></div>
+
+            <!-- Content -->
+            <div class="relative z-10 space-y-4">
+              <!-- Icon -->
+              <div class="text-5xl">{module.icon}</div>
+
+              <!-- Title -->
+              <h3 class="text-xl font-bold text-white group-hover:text-slate-100">
+                {module.name}
+              </h3>
+
+              <!-- Description -->
+              <p class="text-slate-400 text-sm group-hover:text-slate-300 transition-colors">
+                {module.description}
+              </p>
+
+              <!-- Arrow -->
+              <div class="flex items-center text-blue-400 group-hover:text-blue-300 text-sm font-medium">
+                <span>Enter Module</span>
+                <svg
+                  class="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7">
+                  </path>
+                </svg>
+              </div>
+            </div>
+
+            <!-- Border animation -->
+            <div
+              class={`absolute inset-0 border-2 border-${module.color}-500 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
+            ></div>
+          </a>
+        ))}
+      </div>
+
+      <!-- Quick Stats Section -->
+      <div class="mt-16 grid grid-cols-1 md:grid-cols-4 gap-6">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Total Orders</p>
+          <p class="text-3xl font-bold text-blue-400">1,234</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Products</p>
+          <p class="text-3xl font-bold text-green-400">5,678</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Revenue</p>
+          <p class="text-3xl font-bold text-purple-400">$45.2K</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Active Users</p>
+          <p class="text-3xl font-bold text-orange-400">342</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
+    function navState() {
+      return {
+        user: {
+          name: 'Admin User',
+          email: 'admin@workchain.local'
+        },
+
+        async init() {
+          await this.verifySession();
+        },
+
+        // Verify session via HTTP-only cookie on server
+        // No token is stored on client - it's encrypted and in database
+        async verifySession() {
+          try {
+            const response = await fetch(apiBase + '/auth/me', {
+              method: 'GET',
+              credentials: 'include', // Send HTTP-only cookies
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+
+            if (response.ok) {
+              this.user = await response.json();
+            } else if (response.status === 401 || response.status === 403) {
+              // Session expired or invalid - redirect to login
+              window.location.href = '/login';
+            }
+          } catch (error) {
+            console.error('[v0] Session verification failed:', error);
+            window.location.href = '/login';
+          }
+        },
+
+        async logout() {
+          try {
+            await fetch(apiBase + '/auth/logout', {
+              method: 'POST',
+              credentials: 'include', // Include cookies for logout
+              headers: {
+                'X-Requested-With': 'XMLHttpRequest'
+              }
+            });
+          } catch (error) {
+            console.error('[v0] Logout error:', error);
+          } finally {
+            // Redirect to login - server clears HTTP-only cookie
+            window.location.href = '/login';
+          }
+        }
+      };
+    }
+
+    // Initialize on page load
+    document.addEventListener('DOMContentLoaded', async () => {
+      const nav = navState();
+      await nav.init();
+    });
+  </script>
+</Layout>

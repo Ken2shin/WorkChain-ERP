@@ -1,0 +1,108 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="WorkChain ERP - Projects Management">
+  <div class="min-h-screen bg-slate-900 text-white">
+    <nav class="bg-slate-800 border-b border-slate-700">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+        <div>
+          <h1 class="text-2xl font-bold">Projects Management</h1>
+          <p class="text-slate-400 text-sm">📋 Tasks, timeline & resources</p>
+        </div>
+        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">Back</a>
+      </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div class="bg-orange-500 hover:bg-orange-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Projects</h3>
+          <p class="text-sm opacity-90">Project list</p>
+        </div>
+        <div class="bg-amber-500 hover:bg-amber-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Tasks</h3>
+          <p class="text-sm opacity-90">Task management</p>
+        </div>
+        <div class="bg-yellow-500 hover:bg-yellow-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Resources</h3>
+          <p class="text-sm opacity-90">Team allocation</p>
+        </div>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
+        <h2 class="text-2xl font-bold mb-6">Active Projects</h2>
+        <div class="space-y-4">
+          <div class="p-4 bg-slate-700/50 rounded-lg">
+            <div class="flex justify-between items-start mb-3">
+              <div>
+                <p class="font-bold text-lg">ERP System Upgrade</p>
+                <p class="text-slate-400 text-sm">Due: Mar 31, 2024</p>
+              </div>
+              <span class="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">75% Complete</span>
+            </div>
+            <div class="w-full bg-slate-600 rounded-full h-2">
+              <div class="bg-green-500 h-2 rounded-full" style="width: 75%"></div>
+            </div>
+          </div>
+          <div class="p-4 bg-slate-700/50 rounded-lg">
+            <div class="flex justify-between items-start mb-3">
+              <div>
+                <p class="font-bold text-lg">Mobile App Development</p>
+                <p class="text-slate-400 text-sm">Due: Apr 15, 2024</p>
+              </div>
+              <span class="px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">45% Complete</span>
+            </div>
+            <div class="w-full bg-slate-600 rounded-full h-2">
+              <div class="bg-blue-500 h-2 rounded-full" style="width: 45%"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Total Projects</p>
+          <p class="text-3xl font-bold text-orange-400">24</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Active</p>
+          <p class="text-3xl font-bold text-green-400">8</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">On Hold</p>
+          <p class="text-3xl font-bold text-yellow-400">3</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Total Tasks</p>
+          <p class="text-3xl font-bold text-purple-400">342</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
+    function moduleState() {
+      return {
+        async init() {
+          await this.verifySession();
+        },
+        async verifySession() {
+          try {
+            const response = await fetch(apiBase + '/auth/me', {
+              credentials: 'include',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (response.status === 401 || response.status === 403) {
+              window.location.href = '/login';
+            }
+          } catch (err) {
+            console.error('[v0] Session check failed:', err);
+            window.location.href = '/login';
+          }
+        }
+      };
+    }
+    document.addEventListener('DOMContentLoaded', async () => {
+      const state = moduleState();
+      await state.init();
+    });
+  </script>
+</Layout>

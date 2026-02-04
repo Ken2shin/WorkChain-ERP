@@ -1,94 +1,269 @@
 ---
-import '../app/globals.css';
+import Alpine from 'alpinejs';
 
-const {
-  title = 'WorkChain ERP',
-  description = 'Professional ERP for SMEs'
-} = Astro.props;
-
-const apiBaseUrl = import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api';
+const { title = 'WorkChain ERP', description = 'Professional ERP for SMEs' } = Astro.props;
 ---
 
 <!doctype html>
-<html lang="es">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <title>{title}</title>
-
     <style is:global>
-      [x-cloak] { display: none !important; }
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      :root {
+        --color-primary: #1e40af;
+        --color-primary-light: #3b82f6;
+        --color-primary-dark: #1e3a8a;
+        --color-secondary: #7c3aed;
+        --color-danger: #dc2626;
+        --color-warning: #ea580c;
+        --color-success: #16a34a;
+        --color-neutral-50: #f9fafb;
+        --color-neutral-100: #f3f4f6;
+        --color-neutral-200: #e5e7eb;
+        --color-neutral-300: #d1d5db;
+        --color-neutral-400: #9ca3af;
+        --color-neutral-500: #6b7280;
+        --color-neutral-600: #4b5563;
+        --color-neutral-700: #374151;
+        --color-neutral-800: #1f2937;
+        --color-neutral-900: #111827;
+
+        --spacing-xs: 0.25rem;
+        --spacing-sm: 0.5rem;
+        --spacing-md: 1rem;
+        --spacing-lg: 1.5rem;
+        --spacing-xl: 2rem;
+        --spacing-2xl: 3rem;
+
+        --border-radius: 0.375rem;
+        --border-radius-lg: 0.5rem;
+        --border-radius-xl: 0.75rem;
+
+        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
+
+        --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+        --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+        --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
+      }
+
+      html {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
+          Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
+        font-size: 16px;
+        line-height: 1.5;
+        color: var(--color-neutral-900);
+      }
+
+      body {
+        background-color: var(--color-neutral-50);
+      }
+
+      h1,
+      h2,
+      h3,
+      h4,
+      h5,
+      h6 {
+        font-weight: 600;
+        line-height: 1.2;
+      }
+
+      h1 {
+        font-size: 2rem;
+      }
+      h2 {
+        font-size: 1.75rem;
+      }
+      h3 {
+        font-size: 1.5rem;
+      }
+      h4 {
+        font-size: 1.25rem;
+      }
+      h5 {
+        font-size: 1.125rem;
+      }
+      h6 {
+        font-size: 1rem;
+      }
+
+      a {
+        color: var(--color-primary);
+        text-decoration: none;
+        transition: color var(--transition-fast);
+      }
+
+      a:hover {
+        color: var(--color-primary-light);
+      }
+
+      button,
+      input,
+      select,
+      textarea {
+        font: inherit;
+        color: inherit;
+      }
+
+      button {
+        cursor: pointer;
+      }
+
+      [x-cloak] {
+        display: none;
+      }
     </style>
   </head>
-
-  <body
-    x-data="appState()"
-    class="min-h-screen bg-slate-50 text-slate-900 antialiased"
-  >
-
+  <body x-data="appState()">
+    <!-- Loader -->
     <div
       x-show="loading"
+      class="fixed inset-0 flex items-center justify-center bg-black/50 z-50"
       x-cloak
-      x-transition
-      class="fixed inset-0 z-50 flex items-center justify-center bg-black/40"
     >
-      <div class="bg-white rounded-2xl p-6 shadow-xl">
-        <svg class="w-8 h-8 animate-spin text-blue-600" fill="none" viewBox="0 0 24 24">
-          <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" />
-          <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.37 0 0 5.37 0 12h4z" />
-        </svg>
+      <div class="bg-white rounded-lg p-8 shadow-lg">
+        <div class="animate-spin">
+          <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <circle
+              class="opacity-25"
+              cx="12"
+              cy="12"
+              r="10"
+              stroke="currentColor"
+              stroke-width="4"
+            ></circle>
+            <path
+              class="opacity-75"
+              fill="currentColor"
+              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+            ></path>
+          </svg>
+        </div>
       </div>
     </div>
 
+    <!-- Toast Notifications -->
     <div class="fixed top-4 right-4 z-40 space-y-2">
       <template x-for="toast in toasts" :key="toast.id">
         <div
+          :class=`{
+            'bg-green-50 border border-green-200 text-green-800': toast.type === 'success',
+            'bg-red-50 border border-red-200 text-red-800': toast.type === 'error',
+            'bg-yellow-50 border border-yellow-200 text-yellow-800': toast.type === 'warning',
+            'bg-blue-50 border border-blue-200 text-blue-800': toast.type === 'info'
+          }`
+          class="px-4 py-3 rounded-lg shadow-md"
           x-text="toast.message"
-          :class="getToastClasses(toast.type)"
-          class="px-4 py-3 rounded-xl shadow border text-sm font-medium"
-          x-transition
-        ></div>
+        >
+        </div>
       </template>
     </div>
 
     <slot />
 
-    <script type="module">
+    <script
+      define:vars={{
+        apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api',
+      }}
+    >
+      window.API_BASE = apiBase;
+
+      function appState() {
+        return {
+          loading: false,
+          toasts: [],
+          user: null,
+          token: null,
+
+          async init() {
+            await this.checkAuth();
+          },
+
+          async checkAuth() {
+            const token = localStorage.getItem('auth_token');
+            if (token) {
+              this.token = token;
+              // Validate token with backend
+              try {
+                await this.apiCall('/auth/verify', 'GET');
+              } catch (error) {
+                this.logout();
+              }
+            }
+          },
+
+          async apiCall(endpoint, method = 'GET', data = null) {
+            this.loading = true;
+            try {
+              const options = {
+                method,
+                headers: {
+                  'Content-Type': 'application/json',
+                  'X-Requested-With': 'XMLHttpRequest',
+                },
+              };
+
+              if (this.token) {
+                options.headers['Authorization'] = `Bearer ${this.token}`;
+              }
+
+              if (data) {
+                options.body = JSON.stringify(data);
+              }
+
+              const response = await fetch(window.API_BASE + endpoint, options);
+
+              if (!response.ok) {
+                throw new Error(`HTTP ${response.status}`);
+              }
+
+              return await response.json();
+            } catch (error) {
+              this.showToast('Error: ' + error.message, 'error');
+              throw error;
+            } finally {
+              this.loading = false;
+            }
+          },
+
+          showToast(message, type = 'info') {
+            const id = Date.now();
+            this.toasts.push({ id, message, type });
+
+            setTimeout(() => {
+              this.toasts = this.toasts.filter((t) => t.id !== id);
+            }, 3000);
+          },
+
+          logout() {
+            localStorage.removeItem('auth_token');
+            this.token = null;
+            this.user = null;
+            window.location.href = '/login';
+          },
+        };
+      }
+
+      // Initialize Alpine
+      document.addEventListener('alpine:init', () => {
+        Alpine.store('app', appState());
+      });
+    </script>
+
+    <script>
       import Alpine from 'alpinejs';
-
-      window.Alpine = Alpine;
-
-      Alpine.data('appState', () => ({
-        loading: false,
-        toasts: [],
-        token: localStorage.getItem('auth_token'),
-
-        getToastClasses(type) {
-          const base = 'border ';
-          switch (type) {
-            case 'success': return base + 'bg-green-100 text-green-800 border-green-200';
-            case 'error':   return base + 'bg-red-100 text-red-800 border-red-200';
-            case 'warning': return base + 'bg-yellow-100 text-yellow-800 border-yellow-200';
-            default:        return base + 'bg-blue-100 text-blue-800 border-blue-200';
-          }
-        },
-
-        showToast(message, type = 'info') {
-          const id = Date.now();
-          this.toasts.push({ id, message, type });
-          setTimeout(() => {
-            this.toasts = this.toasts.filter(t => t.id !== id);
-          }, 3000);
-        }
-      }));
-
       Alpine.start();
     </script>
-
-    <script define:vars={{ apiBase: apiBaseUrl }}>
-      window.API_BASE = apiBase;
-    </script>
-
   </body>
 </html>

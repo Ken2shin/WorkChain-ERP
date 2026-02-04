@@ -1,0 +1,106 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="WorkChain ERP - Sales Management">
+  <div class="min-h-screen bg-slate-900 text-white">
+    <nav class="bg-slate-800 border-b border-slate-700">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+        <div>
+          <h1 class="text-2xl font-bold">Sales Management</h1>
+          <p class="text-slate-400 text-sm">💰 Manage orders, customers and invoices</p>
+        </div>
+        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">Back</a>
+      </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div class="bg-green-500 hover:bg-green-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Orders</h3>
+          <p class="text-sm opacity-90">Manage sales orders</p>
+        </div>
+        <div class="bg-blue-500 hover:bg-blue-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Customers</h3>
+          <p class="text-sm opacity-90">Customer database</p>
+        </div>
+        <div class="bg-purple-500 hover:bg-purple-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Invoices</h3>
+          <p class="text-sm opacity-90">Invoice management</p>
+        </div>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
+        <h2 class="text-2xl font-bold mb-6">Recent Orders</h2>
+        <div class="space-y-4">
+          <div class="flex justify-between items-center p-4 bg-slate-700/50 rounded-lg">
+            <div>
+              <p class="font-bold">Order #SO-2024-001</p>
+              <p class="text-slate-400 text-sm">Customer: Acme Corp</p>
+            </div>
+            <div class="text-right">
+              <p class="font-bold text-green-400">$15,420.50</p>
+              <span class="inline-block px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">Completed</span>
+            </div>
+          </div>
+          <div class="flex justify-between items-center p-4 bg-slate-700/50 rounded-lg">
+            <div>
+              <p class="font-bold">Order #SO-2024-002</p>
+              <p class="text-slate-400 text-sm">Customer: TechStart Inc</p>
+            </div>
+            <div class="text-right">
+              <p class="font-bold text-blue-400">$8,750.00</p>
+              <span class="inline-block px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">Processing</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Total Revenue</p>
+          <p class="text-3xl font-bold text-green-400">$245.6K</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Orders This Month</p>
+          <p class="text-3xl font-bold text-blue-400">87</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Active Customers</p>
+          <p class="text-3xl font-bold text-purple-400">156</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Avg Order Value</p>
+          <p class="text-3xl font-bold text-orange-400">$2.8K</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
+    function moduleState() {
+      return {
+        async init() {
+          await this.verifySession();
+        },
+
+        async verifySession() {
+          try {
+            const response = await fetch(apiBase + '/auth/me', {
+              credentials: 'include',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (response.status === 401 || response.status === 403) {
+              window.location.href = '/login';
+            }
+          } catch (err) {
+            console.error('[v0] Session check failed:', err);
+            window.location.href = '/login';
+          }
+        }
+      };
+    }
+
+    document.addEventListener('DOMContentLoaded', async () => {
+      const state = moduleState();
+      await state.init();
+    });
+  </script>
+</Layout>

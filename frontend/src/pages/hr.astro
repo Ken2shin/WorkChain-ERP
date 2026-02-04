@@ -1,0 +1,108 @@
+---
+import Layout from '../layouts/Layout.astro';
+---
+
+<Layout title="WorkChain ERP - Human Resources">
+  <div class="min-h-screen bg-slate-900 text-white">
+    <nav class="bg-slate-800 border-b border-slate-700">
+      <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
+        <div>
+          <h1 class="text-2xl font-bold">Human Resources</h1>
+          <p class="text-slate-400 text-sm">👥 Employees, payroll & attendance</p>
+        </div>
+        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">Back</a>
+      </div>
+    </nav>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
+        <div class="bg-red-500 hover:bg-red-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Employees</h3>
+          <p class="text-sm opacity-90">Employee directory</p>
+        </div>
+        <div class="bg-pink-500 hover:bg-pink-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Payroll</h3>
+          <p class="text-sm opacity-90">Salary management</p>
+        </div>
+        <div class="bg-rose-500 hover:bg-rose-600 rounded-xl p-6 transition-colors cursor-pointer">
+          <h3 class="text-xl font-bold mb-2">Attendance</h3>
+          <p class="text-sm opacity-90">Track attendance</p>
+        </div>
+      </div>
+      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
+        <h2 class="text-2xl font-bold mb-6">Team Members</h2>
+        <div class="overflow-x-auto">
+          <table class="w-full text-left">
+            <thead class="border-b border-slate-700">
+              <tr>
+                <th class="px-4 py-3 text-slate-300">Name</th>
+                <th class="px-4 py-3 text-slate-300">Department</th>
+                <th class="px-4 py-3 text-slate-300">Position</th>
+                <th class="px-4 py-3 text-slate-300">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr class="border-b border-slate-700 hover:bg-slate-700/50">
+                <td class="px-4 py-3">John Smith</td>
+                <td class="px-4 py-3">Sales</td>
+                <td class="px-4 py-3">Sales Manager</td>
+                <td class="px-4 py-3"><span class="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">Active</span></td>
+              </tr>
+              <tr class="border-b border-slate-700 hover:bg-slate-700/50">
+                <td class="px-4 py-3">Sarah Johnson</td>
+                <td class="px-4 py-3">HR</td>
+                <td class="px-4 py-3">HR Manager</td>
+                <td class="px-4 py-3"><span class="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">Active</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Total Employees</p>
+          <p class="text-3xl font-bold text-red-400">156</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Present Today</p>
+          <p class="text-3xl font-bold text-green-400">143</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">On Leave</p>
+          <p class="text-3xl font-bold text-yellow-400">8</p>
+        </div>
+        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
+          <p class="text-slate-400 text-sm mb-2">Monthly Payroll</p>
+          <p class="text-3xl font-bold text-blue-400">$245K</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
+    function moduleState() {
+      return {
+        async init() {
+          await this.verifySession();
+        },
+        async verifySession() {
+          try {
+            const response = await fetch(apiBase + '/auth/me', {
+              credentials: 'include',
+              headers: { 'X-Requested-With': 'XMLHttpRequest' }
+            });
+            if (response.status === 401 || response.status === 403) {
+              window.location.href = '/login';
+            }
+          } catch (err) {
+            console.error('[v0] Session check failed:', err);
+            window.location.href = '/login';
+          }
+        }
+      };
+    }
+    document.addEventListener('DOMContentLoaded', async () => {
+      const state = moduleState();
+      await state.init();
+    });
+  </script>
+</Layout>
