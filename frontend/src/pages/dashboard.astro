@@ -1,243 +1,171 @@
 ---
 import Layout from '../layouts/Layout.astro';
-
-// Module configuration
-const modules = [
-  {
-    id: 'inventory',
-    name: 'Inventory',
-    description: 'Manage warehouses, products & stock',
-    icon: '📦',
-    color: 'blue',
-    url: '/inventory'
-  },
-  {
-    id: 'sales',
-    name: 'Sales',
-    description: 'Orders, customers & invoices',
-    icon: '💰',
-    color: 'green',
-    url: '/sales'
-  },
-  {
-    id: 'purchases',
-    name: 'Purchases',
-    description: 'Suppliers, POs & requisitions',
-    icon: '🛒',
-    color: 'purple',
-    url: '/purchases'
-  },
-  {
-    id: 'hr',
-    name: 'Human Resources',
-    description: 'Employees, payroll & attendance',
-    icon: '👥',
-    color: 'red',
-    url: '/hr'
-  },
-  {
-    id: 'projects',
-    name: 'Projects',
-    description: 'Tasks, timeline & resources',
-    icon: '📋',
-    color: 'orange',
-    url: '/projects'
-  },
-  {
-    id: 'logistics',
-    name: 'Logistics',
-    description: 'Shipments, routes & tracking',
-    icon: '🚚',
-    color: 'cyan',
-    url: '/logistics'
-  },
-  {
-    id: 'finance',
-    name: 'Finance',
-    description: 'Accounts, reports & budgets',
-    icon: '💳',
-    color: 'indigo',
-    url: '/finance'
-  },
-  {
-    id: 'documents',
-    name: 'Documents',
-    description: 'Files & compliance',
-    icon: '📄',
-    color: 'slate',
-    url: '/documents'
-  }
-];
 ---
 
 <Layout title="WorkChain ERP - Dashboard">
-  <div class="min-h-screen bg-slate-900 text-white">
-    <!-- Header/Navbar -->
-    <nav class="bg-slate-800 border-b border-slate-700" x-data="navState()">
+  <div class="min-h-screen bg-gray-50">
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-40 shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div class="flex justify-between items-center h-16">
-          <!-- Logo -->
-          <div class="flex items-center space-x-3">
-            <span class="text-2xl font-bold text-blue-400">WorkChain</span>
-            <span class="text-sm text-slate-400">ERP Dashboard</span>
+          <div class="flex items-center gap-8">
+            <h1 class="text-2xl font-bold text-blue-600">WorkChain ERP</h1>
           </div>
-
-          <!-- User Menu -->
-          <div class="flex items-center space-x-4">
-            <div class="text-sm">
-              <p class="text-white" x-text="user?.name || 'User'"></p>
-              <p class="text-slate-400 text-xs" x-text="user?.email || 'loading...'"></p>
+          <div class="flex items-center gap-4" x-data="{ menu: false }">
+            <div class="text-right">
+              <p class="text-sm font-medium text-gray-900" x-text="$store.app.user?.name || 'User'"></p>
+              <p class="text-xs text-gray-500" x-text="$store.app.user?.role || 'Employee'"></p>
             </div>
-            <button
-              @click="logout()"
-              class="px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-sm transition-colors"
-            >
-              Logout
+            <button @click="menu = !menu" class="p-2 rounded-full hover:bg-gray-100">
+              <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/>
+              </svg>
             </button>
+            <div x-show="menu" @click.outside="menu = false" class="absolute right-0 mt-48 w-48 bg-white rounded-lg shadow-lg py-2 z-50" style="display: none;">
+              <a href="/profile" class="block px-4 py-2 hover:bg-gray-100">Profile</a>
+              <button @click="$store.app.logout()" class="w-full text-left px-4 py-2 text-red-600 hover:bg-gray-100">Logout</button>
+            </div>
           </div>
         </div>
       </div>
     </nav>
 
-    <!-- Main Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <!-- Welcome Section -->
-      <div class="mb-12">
-        <h1 class="text-4xl font-bold mb-2">Welcome to WorkChain ERP</h1>
-        <p class="text-slate-400 text-lg">Manage all your business operations from one place</p>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      <div class="mb-8">
+        <h2 class="text-3xl font-bold text-gray-900">Dashboard</h2>
+        <p class="text-gray-600 mt-2">Overview of your business operations</p>
       </div>
 
-      <!-- Modules Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+          <p class="text-gray-600 text-sm font-medium">Total Products</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-data="{ count: 0 }" @load="count = $el.getAttribute('data-count')" data-count="0" x-text="count">0</p>
+          <p class="text-xs text-gray-500 mt-4">Real-time inventory</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+          <p class="text-gray-600 text-sm font-medium">Monthly Sales</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2">$0.00</p>
+          <p class="text-xs text-gray-500 mt-4">This month</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+          <p class="text-gray-600 text-sm font-medium">Pending Orders</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2">0</p>
+          <p class="text-xs text-gray-500 mt-4">Awaiting confirmation</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+          <p class="text-gray-600 text-sm font-medium">Active Staff</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2">0</p>
+          <p class="text-xs text-gray-500 mt-4">In your organization</p>
+        </div>
+      </div>
+
       <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {modules.map((module) => (
-          <a
-            href={module.url}
-            class={`group relative bg-slate-800 hover:bg-slate-700 border border-slate-700 hover:border-${module.color}-500 rounded-xl p-6 transition-all duration-300 transform hover:scale-105 cursor-pointer overflow-hidden`}
-          >
-            <!-- Background gradient on hover -->
-            <div
-              class={`absolute inset-0 bg-gradient-to-br from-${module.color}-500/10 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
-            ></div>
+        <a href="/inventory" class="bg-white rounded-lg shadow p-6 hover:shadow-lg hover:border-blue-500 border-2 border-transparent transition-all">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Inventory</h3>
+            <svg class="w-8 h-8 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M20 7l-8-4-8 4m0 0l8 4m-8-4v10l8 4m0-10l8-4m-8 4v10l8-4M7 7h.01"/>
+            </svg>
+          </div>
+          <p class="text-gray-600 text-sm">Manage products, warehouses and stock</p>
+          <div class="text-blue-600 text-sm font-medium mt-4 flex items-center gap-1">Open <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
 
-            <!-- Content -->
-            <div class="relative z-10 space-y-4">
-              <!-- Icon -->
-              <div class="text-5xl">{module.icon}</div>
+        <a href="/sales" class="bg-white rounded-lg shadow p-6 hover:shadow-lg hover:border-green-500 border-2 border-transparent transition-all">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Sales</h3>
+            <svg class="w-8 h-8 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <p class="text-gray-600 text-sm">Orders, customers and invoices</p>
+          <div class="text-green-600 text-sm font-medium mt-4 flex items-center gap-1">Open <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
 
-              <!-- Title -->
-              <h3 class="text-xl font-bold text-white group-hover:text-slate-100">
-                {module.name}
-              </h3>
+        <a href="/purchases" class="bg-white rounded-lg shadow p-6 hover:shadow-lg hover:border-orange-500 border-2 border-transparent transition-all">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Purchases</h3>
+            <svg class="w-8 h-8 text-orange-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z"/>
+            </svg>
+          </div>
+          <p class="text-gray-600 text-sm">Suppliers, POs and requisitions</p>
+          <div class="text-orange-600 text-sm font-medium mt-4 flex items-center gap-1">Open <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
 
-              <!-- Description -->
-              <p class="text-slate-400 text-sm group-hover:text-slate-300 transition-colors">
-                {module.description}
-              </p>
+        <a href="/hr" class="bg-white rounded-lg shadow p-6 hover:shadow-lg hover:border-purple-500 border-2 border-transparent transition-all">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">HR</h3>
+            <svg class="w-8 h-8 text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 12H9m6 0H9m6 0a4 4 0 11-8 0m8 0H9m-1.172 5.768A4.004 4.004 0 0112 21h4a4 4 0 01-1.172-5.768"/>
+            </svg>
+          </div>
+          <p class="text-gray-600 text-sm">Employees, payroll and attendance</p>
+          <div class="text-purple-600 text-sm font-medium mt-4 flex items-center gap-1">Open <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
 
-              <!-- Arrow -->
-              <div class="flex items-center text-blue-400 group-hover:text-blue-300 text-sm font-medium">
-                <span>Enter Module</span>
-                <svg
-                  class="w-4 h-4 ml-2 transform group-hover:translate-x-1 transition-transform"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                >
-                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7">
-                  </path>
-                </svg>
-              </div>
-            </div>
+        <a href="/projects" class="bg-white rounded-lg shadow p-6 hover:shadow-lg hover:border-red-500 border-2 border-transparent transition-all">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Projects</h3>
+            <svg class="w-8 h-8 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+            </svg>
+          </div>
+          <p class="text-gray-600 text-sm">Tasks, timelines and resources</p>
+          <div class="text-red-600 text-sm font-medium mt-4 flex items-center gap-1">Open <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
 
-            <!-- Border animation -->
-            <div
-              class={`absolute inset-0 border-2 border-${module.color}-500 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-300`}
-            ></div>
-          </a>
-        ))}
-      </div>
+        <a href="/logistics" class="bg-white rounded-lg shadow p-6 hover:shadow-lg hover:border-cyan-500 border-2 border-transparent transition-all">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Logistics</h3>
+            <svg class="w-8 h-8 text-cyan-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
+            </svg>
+          </div>
+          <p class="text-gray-600 text-sm">Shipments, routes and tracking</p>
+          <div class="text-cyan-600 text-sm font-medium mt-4 flex items-center gap-1">Open <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
 
-      <!-- Quick Stats Section -->
-      <div class="mt-16 grid grid-cols-1 md:grid-cols-4 gap-6">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Total Orders</p>
-          <p class="text-3xl font-bold text-blue-400">1,234</p>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Products</p>
-          <p class="text-3xl font-bold text-green-400">5,678</p>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Revenue</p>
-          <p class="text-3xl font-bold text-purple-400">$45.2K</p>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Active Users</p>
-          <p class="text-3xl font-bold text-orange-400">342</p>
-        </div>
+        <a href="/finance" class="bg-white rounded-lg shadow p-6 hover:shadow-lg hover:border-indigo-500 border-2 border-transparent transition-all">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Finance</h3>
+            <svg class="w-8 h-8 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+            </svg>
+          </div>
+          <p class="text-gray-600 text-sm">Accounts, reports and budgets</p>
+          <div class="text-indigo-600 text-sm font-medium mt-4 flex items-center gap-1">Open <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
+
+        <a href="/documents" class="bg-white rounded-lg shadow p-6 hover:shadow-lg hover:border-gray-500 border-2 border-transparent transition-all">
+          <div class="flex items-center justify-between mb-4">
+            <h3 class="text-lg font-semibold text-gray-900">Documents</h3>
+            <svg class="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+            </svg>
+          </div>
+          <p class="text-gray-600 text-sm">Files and compliance documents</p>
+          <div class="text-gray-600 text-sm font-medium mt-4 flex items-center gap-1">Open <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/></svg></div>
+        </a>
       </div>
     </main>
   </div>
 
-  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
-    function navState() {
-      return {
-        user: {
-          name: 'Admin User',
-          email: 'admin@workchain.local'
-        },
+  <script>
+    // FIX TYPESCRIPT: Le decimos al compilador que "Alpine" existe en la ventana global
+    declare const Alpine: any;
 
-        async init() {
-          await this.verifySession();
-        },
-
-        // Verify session via HTTP-only cookie on server
-        // No token is stored on client - it's encrypted and in database
-        async verifySession() {
-          try {
-            const response = await fetch(apiBase + '/auth/me', {
-              method: 'GET',
-              credentials: 'include', // Send HTTP-only cookies
-              headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-              }
-            });
-
-            if (response.ok) {
-              this.user = await response.json();
-            } else if (response.status === 401 || response.status === 403) {
-              // Session expired or invalid - redirect to login
-              window.location.href = '/login';
-            }
-          } catch (error) {
-            console.error('[v0] Session verification failed:', error);
-            window.location.href = '/login';
-          }
-        },
-
-        async logout() {
-          try {
-            await fetch(apiBase + '/auth/logout', {
-              method: 'POST',
-              credentials: 'include', // Include cookies for logout
-              headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-              }
-            });
-          } catch (error) {
-            console.error('[v0] Logout error:', error);
-          } finally {
-            // Redirect to login - server clears HTTP-only cookie
-            window.location.href = '/login';
-          }
-        }
-      };
-    }
-
-    // Initialize on page load
-    document.addEventListener('DOMContentLoaded', async () => {
-      const nav = navState();
-      await nav.init();
+    document.addEventListener('alpine:init', () => {
+      // Verificamos que el store y el usuario existan antes de redirigir
+      const appStore = Alpine.store('app');
+      
+      // Si no existe el store o no está autenticado, redirigir
+      if (!appStore || !appStore.authenticated) {
+        // Opción: descomentar si quieres forzar login
+        // window.location.href = '/login';
+      }
     });
   </script>
 </Layout>

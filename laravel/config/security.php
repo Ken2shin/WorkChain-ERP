@@ -93,7 +93,7 @@ return [
      * CORS Configuration
      */
     'cors' => [
-        'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'https://workchain.local')),
+        'allowed_origins' => explode(',', env('CORS_ALLOWED_ORIGINS', 'https://experimental-alyse-kenshin23-f650edd7.koyeb.app/')),
         'allowed_methods' => ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
         'allowed_headers' => ['Content-Type', 'Authorization', 'X-Tenant-ID', 'X-Requested-With'],
         'expose_headers' => ['X-RateLimit-Limit', 'X-RateLimit-Remaining'],

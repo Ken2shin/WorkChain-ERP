@@ -1,150 +1,321 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+// Este componente requiere autenticación
+// Los datos se cargan dinámicamente en el cliente
 ---
 
 <Layout title="WorkChain ERP - Inventory Management">
-  <div class="min-h-screen bg-slate-900 text-white">
-    <!-- Header -->
-    <nav class="bg-slate-800 border-b border-slate-700">
+  <div class="min-h-screen bg-gray-50">
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
         <div>
-          <h1 class="text-2xl font-bold">Inventory Management</h1>
-          <p class="text-slate-400 text-sm">📦 Manage warehouses, products and stock</p>
+          <h1 class="text-2xl font-bold text-gray-900">Inventory Management</h1>
+          <p class="text-gray-500 text-sm">Manage warehouses, products and real-time stock</p>
         </div>
-        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg transition-colors">
+        <a href="/dashboard" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
           Back to Dashboard
         </a>
       </div>
     </nav>
 
-    <!-- Content -->
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <!-- Navigation Cards -->
-        <a href="/inventory" class="bg-blue-500 hover:bg-blue-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Dashboard</h3>
-          <p class="text-sm opacity-90">View inventory overview and statistics</p>
-        </a>
-        <a href="/inventory" class="bg-purple-500 hover:bg-purple-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Warehouses</h3>
-          <p class="text-sm opacity-90">Manage warehouse locations and capacity</p>
-        </a>
-        <a href="/inventory" class="bg-green-500 hover:bg-green-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Products</h3>
-          <p class="text-sm opacity-90">View and edit product catalog</p>
-        </a>
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" x-data="inventoryStats()">
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+          <p class="text-gray-600 text-sm font-medium">Total Products</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.totalProducts || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">All items in catalog</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+          <p class="text-gray-600 text-sm font-medium">Total Warehouses</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.totalWarehouses || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">Active locations</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500">
+          <p class="text-gray-600 text-sm font-medium">Low Stock Items</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.lowStockCount || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">Below minimum</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+          <p class="text-gray-600 text-sm font-medium">Out of Stock</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.outOfStockCount || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">Need reorder</p>
+        </div>
       </div>
 
-      <!-- Data Section -->
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
-        <h2 class="text-2xl font-bold mb-6">Stock Levels</h2>
-        <div class="overflow-x-auto">
-          <table class="w-full text-left">
-            <thead class="border-b border-slate-700">
+      <div class="bg-white rounded-lg shadow overflow-hidden" x-data="inventoryTable()">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Product Stock Levels</h2>
+          <p class="text-sm text-gray-500 mt-1">Real-time inventory from database</p>
+        </div>
+
+        <div x-show="loading" class="p-12 text-center">
+          <div class="inline-block">
+            <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            <p class="text-gray-500 mt-4">Loading inventory data...</p>
+          </div>
+        </div>
+
+        <div x-show="error && !loading" class="p-6 bg-red-50 border-l-4 border-red-500" style="display: none;">
+          <p class="text-red-800 font-medium" x-text="error"></p>
+        </div>
+
+        <div x-show="!loading && !error" class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th class="px-4 py-3 text-slate-300">Product ID</th>
-                <th class="px-4 py-3 text-slate-300">Product Name</th>
-                <th class="px-4 py-3 text-slate-300">Warehouse</th>
-                <th class="px-4 py-3 text-slate-300">Current Stock</th>
-                <th class="px-4 py-3 text-slate-300">Min Level</th>
-                <th class="px-4 py-3 text-slate-300">Status</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Product Name</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">SKU</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Warehouse</th>
+                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">Current Stock</th>
+                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">Min Level</th>
+                <th class="px-6 py-3 text-center text-sm font-medium text-gray-700">Status</th>
               </tr>
             </thead>
             <tbody>
-              <tr class="border-b border-slate-700 hover:bg-slate-700/50">
-                <td class="px-4 py-3">INV-001</td>
-                <td class="px-4 py-3 text-blue-300">Widget A</td>
-                <td class="px-4 py-3">Main Warehouse</td>
-                <td class="px-4 py-3 font-bold">450</td>
-                <td class="px-4 py-3">100</td>
-                <td class="px-4 py-3"><span class="px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">In Stock</span></td>
-              </tr>
-              <tr class="border-b border-slate-700 hover:bg-slate-700/50">
-                <td class="px-4 py-3">INV-002</td>
-                <td class="px-4 py-3 text-blue-300">Widget B</td>
-                <td class="px-4 py-3">Distribution Center</td>
-                <td class="px-4 py-3 font-bold">25</td>
-                <td class="px-4 py-3">50</td>
-                <td class="px-4 py-3"><span class="px-3 py-1 bg-yellow-500/20 text-yellow-300 rounded-full text-xs">Low Stock</span></td>
-              </tr>
-              <tr class="border-b border-slate-700 hover:bg-slate-700/50">
-                <td class="px-4 py-3">INV-003</td>
-                <td class="px-4 py-3 text-blue-300">Component X</td>
-                <td class="px-4 py-3">Main Warehouse</td>
-                <td class="px-4 py-3 font-bold">0</td>
-                <td class="px-4 py-3">200</td>
-                <td class="px-4 py-3"><span class="px-3 py-1 bg-red-500/20 text-red-300 rounded-full text-xs">Out of Stock</span></td>
-              </tr>
+              <template x-for="product in products" :key="product.id">
+                <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                  <td class="px-6 py-4 text-sm text-gray-900 font-medium" x-text="product.name"></td>
+                  <td class="px-6 py-4 text-sm text-gray-500 font-mono" x-text="product.sku || 'N/A'"></td>
+                  <td class="px-6 py-4 text-sm text-gray-600" x-text="product.warehouse?.name || 'Unknown'"></td>
+                  <td class="px-6 py-4 text-sm text-right text-gray-900 font-bold" x-text="product.current_stock || 0"></td>
+                  <td class="px-6 py-4 text-sm text-right text-gray-600" x-text="product.min_level || 0"></td>
+                  <td class="px-6 py-4 text-center">
+                    <template x-if="product.current_stock > product.min_level">
+                      <span class="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">In Stock</span>
+                    </template>
+                    <template x-if="product.current_stock <= product.min_level && product.current_stock > 0">
+                      <span class="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">Low</span>
+                    </template>
+                    <template x-if="product.current_stock === 0">
+                      <span class="inline-block px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">Out</span>
+                    </template>
+                  </td>
+                </tr>
+              </template>
+
+              <template x-if="products.length === 0 && !loading && !error">
+                <tr>
+                  <td colspan="6" class="px-6 py-12 text-center">
+                    <p class="text-gray-500">No products found. Create your first product from the API.</p>
+                  </td>
+                </tr>
+              </template>
             </tbody>
           </table>
         </div>
       </div>
 
-      <!-- Stats -->
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Total Products</p>
-          <p class="text-3xl font-bold text-blue-400">1,234</p>
+      <div class="mt-8 bg-white rounded-lg shadow overflow-hidden" x-data="warehouseList()">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Warehouse Locations</h2>
+          <p class="text-sm text-gray-500 mt-1">Active storage facilities</p>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Warehouses</p>
-          <p class="text-3xl font-bold text-green-400">8</p>
+
+        <div x-show="loading" class="p-12 text-center">
+          <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Low Stock Items</p>
-          <p class="text-3xl font-bold text-yellow-400">42</p>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Out of Stock</p>
-          <p class="text-3xl font-bold text-red-400">3</p>
+
+        <div x-show="!loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+          <template x-for="warehouse in warehouses" :key="warehouse.id">
+            <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-500 transition-colors">
+              <h3 class="font-semibold text-gray-900" x-text="warehouse.name"></h3>
+              <p class="text-sm text-gray-600 mt-1" x-text="`Location: ${warehouse.location || 'N/A'}`"></p>
+              <div class="mt-4 flex items-center justify-between">
+                <span class="text-sm text-gray-500">Capacity</span>
+                <span class="font-bold text-gray-900" x-text="`${warehouse.capacity || 0} units`"></span>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="warehouses.length === 0 && !loading">
+            <div class="col-span-full text-center py-8">
+              <p class="text-gray-500">No warehouses configured.</p>
+            </div>
+          </template>
         </div>
       </div>
+
     </main>
   </div>
 
-  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
-    function moduleState() {
+  <script>
+    // 1. Declaración global para silenciar el error "Cannot find name Alpine"
+    declare const Alpine: any;
+
+    function inventoryStats() {
       return {
+        stats: {
+          totalProducts: 0,
+          totalWarehouses: 0,
+          lowStockCount: 0,
+          outOfStockCount: 0,
+        },
         loading: true,
-        error: null,
-        data: [],
+        // 2. Tipado para que acepte string o null
+        error: null as string | null,
 
         async init() {
-          await this.loadData();
+          await this.loadStats();
         },
 
-        // Load data with HTTP-only cookie session
-        // Token is encrypted on server, never exposed to client
-        async loadData() {
+        async loadStats() {
           try {
-            const response = await fetch(apiBase + '/inventory/data', {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            // Casting seguro para API_BASE
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/inventory/stats', {
               method: 'GET',
-              credentials: 'include', // Send HTTP-only session cookie
               headers: {
-                'X-Requested-With': 'XMLHttpRequest'
-              }
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
             });
 
-            if (response.ok) {
-              this.data = await response.json();
-            } else if (response.status === 401 || response.status === 403) {
-              window.location.href = '/login';
-            } else {
-              this.error = 'Failed to load inventory data';
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+              this.stats = data.data || this.stats;
             }
           } catch (err) {
-            console.error('[v0] Inventory load error:', err);
-            this.error = 'Connection error';
+            console.error('[v0] Stats loading error:', err);
+            this.error = 'Failed to load statistics';
           } finally {
             this.loading = false;
           }
-        }
+        },
       };
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const state = moduleState();
-      await state.init();
+    function inventoryTable() {
+      return {
+        // 3. Tipado explícito para arrays vacíos
+        products: [] as any[],
+        loading: true,
+        error: null as string | null,
+
+        async init() {
+          await this.loadProducts();
+        },
+
+        async loadProducts() {
+          try {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/inventory/products', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) {
+              if (response.status === 401) {
+                window.location.href = '/login';
+              }
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+              this.products = data.data || [];
+            }
+          } catch (err) {
+            console.error('[v0] Products loading error:', err);
+            this.error = 'Failed to load products. Please try again.';
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+
+    function warehouseList() {
+      return {
+        // 4. Tipado explícito para arrays vacíos
+        warehouses: [] as any[],
+        loading: true,
+
+        async init() {
+          await this.loadWarehouses();
+        },
+
+        async loadWarehouses() {
+          try {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/inventory/warehouses', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) {
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+              this.warehouses = data.data || [];
+            }
+          } catch (err) {
+            console.error('[v0] Warehouses loading error:', err);
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+
+    // Initialize on page load
+    document.addEventListener('alpine:init', () => {
+      // Verificación segura del store
+      const appStore = Alpine.store('app');
+      
+      if (appStore && appStore.authenticated) {
+        const stats = inventoryStats();
+        const table = inventoryTable();
+        const warehouses = warehouseList();
+        
+        // Inicialización
+        stats.init();
+        table.init();
+        warehouses.init();
+
+        Alpine.data('inventoryStats', () => stats);
+        Alpine.data('inventoryTable', () => table);
+        Alpine.data('warehouseList', () => warehouses);
+      } else {
+        window.location.href = '/login';
+      }
     });
   </script>
 </Layout>

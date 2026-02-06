@@ -3,104 +3,333 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="WorkChain ERP - Sales Management">
-  <div class="min-h-screen bg-slate-900 text-white">
-    <nav class="bg-slate-800 border-b border-slate-700">
+  <div class="min-h-screen bg-gray-50">
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
         <div>
-          <h1 class="text-2xl font-bold">Sales Management</h1>
-          <p class="text-slate-400 text-sm">💰 Manage orders, customers and invoices</p>
+          <h1 class="text-2xl font-bold text-gray-900">Sales Management</h1>
+          <p class="text-gray-500 text-sm">Manage orders, customers and revenue tracking</p>
         </div>
-        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">Back</a>
+        <a href="/dashboard" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+          Back to Dashboard
+        </a>
       </div>
     </nav>
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <div class="bg-green-500 hover:bg-green-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Orders</h3>
-          <p class="text-sm opacity-90">Manage sales orders</p>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" x-data="salesStats()">
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+          <p class="text-gray-600 text-sm font-medium">Monthly Revenue</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="formatCurrency(stats.monthlyRevenue)">C$0.00</p>
+          <p class="text-xs text-gray-500 mt-4">This month</p>
         </div>
-        <div class="bg-blue-500 hover:bg-blue-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Customers</h3>
-          <p class="text-sm opacity-90">Customer database</p>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+          <p class="text-gray-600 text-sm font-medium">Total Orders</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.totalOrders || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">All time</p>
         </div>
-        <div class="bg-purple-500 hover:bg-purple-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Invoices</h3>
-          <p class="text-sm opacity-90">Invoice management</p>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+          <p class="text-gray-600 text-sm font-medium">Active Customers</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.activeCustomers || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">Total registered</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+          <p class="text-gray-600 text-sm font-medium">Avg Order Value</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="formatCurrency(stats.avgOrderValue)">C$0.00</p>
+          <p class="text-xs text-gray-500 mt-4">Average transaction</p>
         </div>
       </div>
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
-        <h2 class="text-2xl font-bold mb-6">Recent Orders</h2>
-        <div class="space-y-4">
-          <div class="flex justify-between items-center p-4 bg-slate-700/50 rounded-lg">
-            <div>
-              <p class="font-bold">Order #SO-2024-001</p>
-              <p class="text-slate-400 text-sm">Customer: Acme Corp</p>
-            </div>
-            <div class="text-right">
-              <p class="font-bold text-green-400">$15,420.50</p>
-              <span class="inline-block px-3 py-1 bg-green-500/20 text-green-300 rounded-full text-xs">Completed</span>
-            </div>
+
+      <div class="bg-white rounded-lg shadow overflow-hidden mb-8" x-data="ordersTable()">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Recent Orders</h2>
+          <p class="text-sm text-gray-500 mt-1">Latest sales transactions from database</p>
+        </div>
+
+        <div x-show="loading" class="p-12 text-center">
+          <div class="inline-block">
+            <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            <p class="text-gray-500 mt-4">Loading orders...</p>
           </div>
-          <div class="flex justify-between items-center p-4 bg-slate-700/50 rounded-lg">
-            <div>
-              <p class="font-bold">Order #SO-2024-002</p>
-              <p class="text-slate-400 text-sm">Customer: TechStart Inc</p>
-            </div>
-            <div class="text-right">
-              <p class="font-bold text-blue-400">$8,750.00</p>
-              <span class="inline-block px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">Processing</span>
-            </div>
-          </div>
+        </div>
+
+        <div x-show="error && !loading" class="p-6 bg-red-50 border-l-4 border-red-500" style="display: none;">
+          <p class="text-red-800 font-medium" x-text="error"></p>
+        </div>
+
+        <div x-show="!loading && !error" class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Order ID</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Customer</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Date</th>
+                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">Amount</th>
+                <th class="px-6 py-3 text-center text-sm font-medium text-gray-700">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="order in orders" :key="order.id">
+                <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                  <td class="px-6 py-4 text-sm text-gray-900 font-medium" x-text="`SO-${order.id}`"></td>
+                  <td class="px-6 py-4 text-sm text-gray-600" x-text="order.customer?.name || 'Unknown'"></td>
+                  <td class="px-6 py-4 text-sm text-gray-500" x-text="formatDate(order.created_at)"></td>
+                  <td class="px-6 py-4 text-sm text-right text-gray-900 font-bold" x-text="formatCurrency(order.total_amount)"></td>
+                  <td class="px-6 py-4 text-center">
+                    <template x-if="order.status === 'completed'">
+                      <span class="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Completed</span>
+                    </template>
+                    <template x-if="order.status === 'pending'">
+                      <span class="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">Pending</span>
+                    </template>
+                    <template x-if="order.status === 'processing'">
+                      <span class="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Processing</span>
+                    </template>
+                    <template x-if="order.status === 'cancelled'">
+                      <span class="inline-block px-3 py-1 bg-red-100 text-red-800 text-xs font-medium rounded-full">Cancelled</span>
+                    </template>
+                  </td>
+                </tr>
+              </template>
+
+              <template x-if="orders.length === 0 && !loading && !error">
+                <tr>
+                  <td colspan="5" class="px-6 py-12 text-center">
+                    <p class="text-gray-500">No orders found. Create your first order.</p>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Total Revenue</p>
-          <p class="text-3xl font-bold text-green-400">$245.6K</p>
+
+      <div class="bg-white rounded-lg shadow overflow-hidden" x-data="customersList()">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Customers</h2>
+          <p class="text-sm text-gray-500 mt-1">Active customer accounts</p>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Orders This Month</p>
-          <p class="text-3xl font-bold text-blue-400">87</p>
+
+        <div x-show="loading" class="p-12 text-center">
+          <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Active Customers</p>
-          <p class="text-3xl font-bold text-purple-400">156</p>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Avg Order Value</p>
-          <p class="text-3xl font-bold text-orange-400">$2.8K</p>
+
+        <div x-show="!loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+          <template x-for="customer in customers" :key="customer.id">
+            <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-500 transition-colors">
+              <h3 class="font-semibold text-gray-900" x-text="customer.name"></h3>
+              <p class="text-sm text-gray-600 mt-1" x-text="customer.email"></p>
+              <div class="mt-4 flex items-center justify-between pt-4 border-t border-gray-100">
+                <span class="text-sm text-gray-500">Total Orders</span>
+                <span class="font-bold text-gray-900" x-text="customer.order_count || 0"></span>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="customers.length === 0 && !loading">
+            <div class="col-span-full text-center py-8">
+              <p class="text-gray-500">No customers registered yet.</p>
+            </div>
+          </template>
         </div>
       </div>
+
     </main>
   </div>
 
-  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
-    function moduleState() {
+  <script>
+    // 1. Declaración global para Alpine
+    declare const Alpine: any;
+
+    function salesStats() {
       return {
+        stats: {
+          monthlyRevenue: 0,
+          totalOrders: 0,
+          activeCustomers: 0,
+          avgOrderValue: 0,
+        },
+        loading: true,
+
         async init() {
-          await this.verifySession();
+          await this.loadStats();
         },
 
-        async verifySession() {
+        async loadStats() {
           try {
-            const response = await fetch(apiBase + '/auth/me', {
-              credentials: 'include',
-              headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            if (response.status === 401 || response.status === 403) {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
               window.location.href = '/login';
+              return;
+            }
+
+            // Casting seguro para API_BASE
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/sales/stats', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            if (data.success) {
+              this.stats = data.data || this.stats;
             }
           } catch (err) {
-            console.error('[v0] Session check failed:', err);
-            window.location.href = '/login';
+            console.error('[v0] Sales stats error:', err);
+          } finally {
+            this.loading = false;
           }
-        }
+        },
+
+        // 2. Formato de Moneda (Por defecto NIO - Córdobas)
+        formatCurrency(value: any, currency = 'NIO') {
+          return new Intl.NumberFormat('es-NI', {
+            style: 'currency',
+            currency: currency,
+          }).format(value || 0);
+        },
       };
     }
 
-    document.addEventListener('DOMContentLoaded', async () => {
-      const state = moduleState();
-      await state.init();
+    function ordersTable() {
+      return {
+        // 3. Tipado explícito para arrays
+        orders: [] as any[],
+        loading: true,
+        // 4. Tipado para error
+        error: null as string | null,
+
+        async init() {
+          await this.loadOrders();
+        },
+
+        async loadOrders() {
+          try {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/sales/orders', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) {
+              if (response.status === 401) window.location.href = '/login';
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+              this.orders = data.data || [];
+            }
+          } catch (err) {
+            console.error('[v0] Orders loading error:', err);
+            this.error = 'Failed to load orders';
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        // Formato moneda (Córdobas por defecto)
+        formatCurrency(value: any, currency = 'NIO') {
+          return new Intl.NumberFormat('es-NI', {
+            style: 'currency',
+            currency: currency,
+          }).format(value || 0);
+        },
+
+        // 5. Tipado explícito para fecha
+        formatDate(date: any) {
+          return new Date(date).toLocaleDateString('es-NI', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          });
+        },
+      };
+    }
+
+    function customersList() {
+      return {
+        // 6. Tipado explícito para arrays
+        customers: [] as any[],
+        loading: true,
+
+        async init() {
+          await this.loadCustomers();
+        },
+
+        async loadCustomers() {
+          try {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/sales/customers', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            if (data.success) {
+              this.customers = data.data || [];
+            }
+          } catch (err) {
+            console.error('[v0] Customers loading error:', err);
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+
+    // Initialize
+    document.addEventListener('alpine:init', () => {
+      // Verificación segura del store
+      const appStore = Alpine.store('app');
+      
+      if (appStore && appStore.authenticated) {
+        const stats = salesStats();
+        const orders = ordersTable();
+        const customers = customersList();
+        
+        stats.init();
+        orders.init();
+        customers.init();
+
+        Alpine.data('salesStats', () => stats);
+        Alpine.data('ordersTable', () => orders);
+        Alpine.data('customersList', () => customers);
+      } else {
+        window.location.href = '/login';
+      }
     });
   </script>
 </Layout>

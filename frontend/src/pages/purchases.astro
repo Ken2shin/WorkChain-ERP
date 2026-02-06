@@ -3,102 +3,351 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="WorkChain ERP - Purchases Management">
-  <div class="min-h-screen bg-slate-900 text-white">
-    <nav class="bg-slate-800 border-b border-slate-700">
+  <div class="min-h-screen bg-gray-50">
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
         <div>
-          <h1 class="text-2xl font-bold">Purchases Management</h1>
-          <p class="text-slate-400 text-sm">🛒 Suppliers, POs & requisitions</p>
+          <h1 class="text-2xl font-bold text-gray-900">Purchases Management</h1>
+          <p class="text-gray-500 text-sm">Manage suppliers, purchase orders and requisitions</p>
         </div>
-        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">Back</a>
+        <a href="/dashboard" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+          Back to Dashboard
+        </a>
       </div>
     </nav>
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <div class="bg-purple-500 hover:bg-purple-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Suppliers</h3>
-          <p class="text-sm opacity-90">Manage suppliers</p>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" x-data="purchaseStats()">
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+          <p class="text-gray-600 text-sm font-medium">Active Suppliers</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.active_suppliers || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">Total registered</p>
         </div>
-        <div class="bg-blue-500 hover:bg-blue-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Purchase Orders</h3>
-          <p class="text-sm opacity-90">PO tracking</p>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+          <p class="text-gray-600 text-sm font-medium">Total POs</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.total_orders || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">All time</p>
         </div>
-        <div class="bg-indigo-500 hover:bg-indigo-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Requisitions</h3>
-          <p class="text-sm opacity-90">Purchase requisitions</p>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-yellow-500">
+          <p class="text-gray-600 text-sm font-medium">Pending Orders</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="stats.pending_orders || '0'">0</p>
+          <p class="text-xs text-gray-500 mt-4">Awaiting fulfillment</p>
+        </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-orange-500">
+          <p class="text-gray-600 text-sm font-medium">YTD Spending</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="formatCurrency(stats.total_spending)">C$0.00</p>
+          <p class="text-xs text-gray-500 mt-4">Total purchases</p>
         </div>
       </div>
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
-        <h2 class="text-2xl font-bold mb-6">Active Purchase Orders</h2>
-        <div class="space-y-4">
-          <div class="flex justify-between items-center p-4 bg-slate-700/50 rounded-lg">
-            <div>
-              <p class="font-bold">PO #PO-2024-001</p>
-              <p class="text-slate-400 text-sm">Supplier: Global Parts Ltd</p>
-            </div>
-            <div class="text-right">
-              <p class="font-bold text-blue-400">$32,500.00</p>
-              <span class="inline-block px-3 py-1 bg-blue-500/20 text-blue-300 rounded-full text-xs">In Transit</span>
-            </div>
+
+      <div class="bg-white rounded-lg shadow overflow-hidden mb-8" x-data="purchaseOrders()">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Recent Purchase Orders</h2>
+          <p class="text-sm text-gray-500 mt-1">Latest orders from database</p>
+        </div>
+
+        <div x-show="loading" class="p-12 text-center">
+          <div class="inline-block">
+            <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            <p class="text-gray-500 mt-4">Loading orders...</p>
           </div>
-          <div class="flex justify-between items-center p-4 bg-slate-700/50 rounded-lg">
-            <div>
-              <p class="font-bold">PO #PO-2024-002</p>
-              <p class="text-slate-400 text-sm">Supplier: TechSupply Co</p>
-            </div>
-            <div class="text-right">
-              <p class="font-bold text-purple-400">$18,750.00</p>
-              <span class="inline-block px-3 py-1 bg-purple-500/20 text-purple-300 rounded-full text-xs">Pending</span>
-            </div>
-          </div>
+        </div>
+
+        <div x-show="error && !loading" class="p-6 bg-red-50 border-l-4 border-red-500" style="display: none;">
+          <p class="text-red-800 font-medium" x-text="error"></p>
+        </div>
+
+        <div x-show="!loading && !error" class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Order #</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Supplier ID</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Date</th>
+                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">Amount</th>
+                <th class="px-6 py-3 text-center text-sm font-medium text-gray-700">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="order in orders" :key="order.id">
+                <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                  <td class="px-6 py-4 text-sm text-gray-900 font-medium" x-text="order.order_number || `PO-${order.id}`"></td>
+                  <td class="px-6 py-4 text-sm text-gray-600" x-text="order.supplier_id"></td>
+                  <td class="px-6 py-4 text-sm text-gray-500" x-text="formatDate(order.order_date || order.created_at)"></td>
+                  <td class="px-6 py-4 text-sm text-right text-gray-900 font-bold" x-text="formatCurrency(order.total_amount, order.currency || 'NIO')"></td>
+                  <td class="px-6 py-4 text-center">
+                    <template x-if="order.status === 'pending'">
+                      <span class="inline-block px-3 py-1 bg-yellow-100 text-yellow-800 text-xs font-medium rounded-full">Pending</span>
+                    </template>
+                    <template x-if="order.status === 'confirmed'">
+                      <span class="inline-block px-3 py-1 bg-blue-100 text-blue-800 text-xs font-medium rounded-full">Confirmed</span>
+                    </template>
+                    <template x-if="order.status === 'completed'">
+                      <span class="inline-block px-3 py-1 bg-green-100 text-green-800 text-xs font-medium rounded-full">Completed</span>
+                    </template>
+                  </td>
+                </tr>
+              </template>
+
+              <template x-if="orders.length === 0 && !loading && !error">
+                <tr>
+                  <td colspan="5" class="px-6 py-12 text-center">
+                    <p class="text-gray-500">No purchase orders found.</p>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Active Suppliers</p>
-          <p class="text-3xl font-bold text-purple-400">42</p>
+
+      <div class="bg-white rounded-lg shadow overflow-hidden" x-data="suppliersList()">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Active Suppliers</h2>
+          <p class="text-sm text-gray-500 mt-1">Registered supplier database</p>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Total POs</p>
-          <p class="text-3xl font-bold text-blue-400">234</p>
+
+        <div x-show="loading" class="p-12 text-center">
+          <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Pending Orders</p>
-          <p class="text-3xl font-bold text-yellow-400">12</p>
-        </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">YTD Spending</p>
-          <p class="text-3xl font-bold text-orange-400">$1.2M</p>
+
+        <div x-show="!loading" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 p-6">
+          <template x-for="supplier in suppliers" :key="supplier.id">
+            <div class="border border-gray-200 rounded-lg p-4 hover:border-purple-500 transition-colors">
+              <h3 class="font-semibold text-gray-900" x-text="supplier.name"></h3>
+              <p class="text-sm text-gray-600 mt-1" x-text="supplier.email"></p>
+              <p class="text-sm text-gray-600" x-text="supplier.phone || 'N/A'"></p>
+              <div class="mt-4 flex items-center justify-between pt-4 border-t border-gray-100">
+                <span class="text-xs text-gray-500" x-text="supplier.city || 'City'"></span>
+                <span :class="supplier.is_active ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-800'" class="text-xs font-medium px-2 py-1 rounded">
+                  <span x-text="supplier.is_active ? 'Active' : 'Inactive'"></span>
+                </span>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="suppliers.length === 0 && !loading">
+            <div class="col-span-full text-center py-8">
+              <p class="text-gray-500">No suppliers registered yet.</p>
+            </div>
+          </template>
         </div>
       </div>
+
     </main>
   </div>
 
-  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
-    function moduleState() {
+  <script>
+    // 1. Declaración global para solucionar error "Cannot find name Alpine"
+    declare const Alpine: any;
+
+    function purchaseStats() {
       return {
-        async init() {
-          await this.verifySession();
+        stats: {
+          active_suppliers: 0,
+          total_orders: 0,
+          pending_orders: 0,
+          total_spending: 0,
         },
-        async verifySession() {
+        loading: true,
+
+        async init() {
+          await this.loadStats();
+        },
+
+        async loadStats() {
           try {
-            const response = await fetch(apiBase + '/auth/me', {
-              credentials: 'include',
-              headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            if (response.status === 401 || response.status === 403) {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
               window.location.href = '/login';
+              return;
+            }
+
+            // Casting seguro para API_BASE
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/purchases/stats', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            if (data.success) {
+              this.stats = data.data || this.stats;
             }
           } catch (err) {
-            console.error('[v0] Session check failed:', err);
-            window.location.href = '/login';
+            console.error('[v0] Purchase stats error:', err);
+          } finally {
+            this.loading = false;
           }
-        }
+        },
+
+        // 2. Formato de Moneda Multidivisa (Por defecto NIO - Nicaragua)
+        formatCurrency(value: any, currency = 'NIO') {
+          // Mapeo de moneda a locale para formato correcto
+          const locales: Record<string, string> = {
+            'NIO': 'es-NI', // Nicaragua
+            'USD': 'en-US', // USA
+            'EUR': 'es-ES', // Europa
+            'MXN': 'es-MX', // Mexico
+          };
+          
+          const locale = locales[currency] || 'es-NI';
+
+          return new Intl.NumberFormat(locale, {
+            style: 'currency',
+            currency: currency,
+          }).format(value || 0);
+        },
       };
     }
-    document.addEventListener('DOMContentLoaded', async () => {
-      const state = moduleState();
-      await state.init();
+
+    function purchaseOrders() {
+      return {
+        // 3. Tipado explícito para arrays vacíos
+        orders: [] as any[],
+        loading: true,
+        // 4. Tipado de error (string o null) para evitar conflicto de tipos
+        error: null as string | null,
+
+        async init() {
+          await this.loadOrders();
+        },
+
+        async loadOrders() {
+          try {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/purchases/orders', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) {
+              if (response.status === 401) window.location.href = '/login';
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+              this.orders = data.data || [];
+            }
+          } catch (err) {
+            console.error('[v0] Orders loading error:', err);
+            this.error = 'Failed to load purchase orders';
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        // Función de moneda accesible en el scope de orders
+        formatCurrency(value: any, currency = 'NIO') {
+          const locales: Record<string, string> = {
+            'NIO': 'es-NI',
+            'USD': 'en-US',
+            'EUR': 'es-ES',
+            'MXN': 'es-MX'
+          };
+          const locale = locales[currency] || 'es-NI';
+          
+          return new Intl.NumberFormat(locale, {
+            style: 'currency',
+            currency: currency,
+          }).format(value || 0);
+        },
+
+        // 5. Tipado explícito para la fecha
+        formatDate(date: any) {
+          return new Date(date).toLocaleDateString('es-NI', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          });
+        },
+      };
+    }
+
+    function suppliersList() {
+      return {
+        // 6. Tipado explícito
+        suppliers: [] as any[],
+        loading: true,
+
+        async init() {
+          await this.loadSuppliers();
+        },
+
+        async loadSuppliers() {
+          try {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/purchases/suppliers', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            if (data.success) {
+              this.suppliers = data.data || [];
+            }
+          } catch (err) {
+            console.error('[v0] Suppliers loading error:', err);
+          } finally {
+            this.loading = false;
+          }
+        },
+      };
+    }
+
+    // Initialize
+    document.addEventListener('alpine:init', () => {
+      // Verificación segura del store
+      const appStore = Alpine.store('app');
+      
+      if (appStore && appStore.authenticated) {
+        const stats = purchaseStats();
+        const orders = purchaseOrders();
+        const suppliers = suppliersList();
+        
+        stats.init();
+        orders.init();
+        suppliers.init();
+
+        Alpine.data('purchaseStats', () => stats);
+        Alpine.data('purchaseOrders', () => orders);
+        Alpine.data('suppliersList', () => suppliers);
+      } else {
+        window.location.href = '/login';
+      }
     });
   </script>
 </Layout>

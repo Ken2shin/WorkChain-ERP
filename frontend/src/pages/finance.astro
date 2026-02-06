@@ -3,109 +3,320 @@ import Layout from '../layouts/Layout.astro';
 ---
 
 <Layout title="WorkChain ERP - Finance Management">
-  <div class="min-h-screen bg-slate-900 text-white">
-    <nav class="bg-slate-800 border-b border-slate-700">
+  <div class="min-h-screen bg-gray-50">
+    <nav class="bg-white border-b border-gray-200 sticky top-0 z-30 shadow-sm">
       <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 flex justify-between items-center h-16">
         <div>
-          <h1 class="text-2xl font-bold">Finance Management</h1>
-          <p class="text-slate-400 text-sm">💳 Accounts, reports & budgets</p>
+          <h1 class="text-2xl font-bold text-gray-900">Finance Management</h1>
+          <p class="text-gray-500 text-sm">Manage accounts, reports and financial planning</p>
         </div>
-        <a href="/dashboard" class="px-4 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg">Back</a>
+        <a href="/dashboard" class="px-4 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg text-sm transition-colors">
+          Back to Dashboard
+        </a>
       </div>
     </nav>
-    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-12">
-        <div class="bg-indigo-500 hover:bg-indigo-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Accounts</h3>
-          <p class="text-sm opacity-90">General ledger</p>
+
+    <main class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+      
+      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8" x-data="financeStats()">
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-green-500">
+          <p class="text-gray-600 text-sm font-medium">Cash Position</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="formatCurrency(stats.cash_position)">$0.00</p>
+          <p class="text-xs text-gray-500 mt-4">Liquid assets</p>
         </div>
-        <div class="bg-violet-500 hover:bg-violet-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Reports</h3>
-          <p class="text-sm opacity-90">Financial reports</p>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-red-500">
+          <p class="text-gray-600 text-sm font-medium">Accounts Payable</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="formatCurrency(stats.accounts_payable)">$0.00</p>
+          <p class="text-xs text-gray-500 mt-4">Outstanding debt</p>
         </div>
-        <div class="bg-fuchsia-500 hover:bg-fuchsia-600 rounded-xl p-6 transition-colors cursor-pointer">
-          <h3 class="text-xl font-bold mb-2">Budgets</h3>
-          <p class="text-sm opacity-90">Budget planning</p>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-blue-500">
+          <p class="text-gray-600 text-sm font-medium">Accounts Receivable</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="formatCurrency(stats.accounts_receivable)">$0.00</p>
+          <p class="text-xs text-gray-500 mt-4">Expected income</p>
         </div>
-      </div>
-      <div class="bg-slate-800 border border-slate-700 rounded-xl p-8">
-        <h2 class="text-2xl font-bold mb-6">Financial Summary</h2>
-        <div class="space-y-4">
-          <div class="flex justify-between p-4 bg-slate-700/50 rounded-lg">
-            <div>
-              <p class="text-slate-400 text-sm">Total Revenue (YTD)</p>
-              <p class="text-2xl font-bold">$2,450,000</p>
-            </div>
-            <div class="text-right">
-              <p class="text-green-400 font-bold">↑ 12.5%</p>
-            </div>
-          </div>
-          <div class="flex justify-between p-4 bg-slate-700/50 rounded-lg">
-            <div>
-              <p class="text-slate-400 text-sm">Total Expenses (YTD)</p>
-              <p class="text-2xl font-bold">$1,850,000</p>
-            </div>
-            <div class="text-right">
-              <p class="text-red-400 font-bold">↑ 8.3%</p>
-            </div>
-          </div>
-          <div class="flex justify-between p-4 bg-slate-700/50 rounded-lg">
-            <div>
-              <p class="text-slate-400 text-sm">Net Profit (YTD)</p>
-              <p class="text-2xl font-bold">$600,000</p>
-            </div>
-            <div class="text-right">
-              <p class="text-green-400 font-bold">↑ 24.5%</p>
-            </div>
-          </div>
+
+        <div class="bg-white rounded-lg shadow p-6 border-l-4 border-purple-500">
+          <p class="text-gray-600 text-sm font-medium">Profit Margin</p>
+          <p class="text-3xl font-bold text-gray-900 mt-2" x-text="`${stats.profit_margin || 0}%`">0%</p>
+          <p class="text-xs text-gray-500 mt-4">Net profitability</p>
         </div>
       </div>
-      <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mt-12">
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Cash Position</p>
-          <p class="text-3xl font-bold text-green-400">$845.2K</p>
+
+      <div class="bg-white rounded-lg shadow overflow-hidden mb-8" x-data="accountsList()">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Chart of Accounts</h2>
+          <p class="text-sm text-gray-500 mt-1">Financial account structure and balances</p>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Accounts Payable</p>
-          <p class="text-3xl font-bold text-red-400">$342.5K</p>
+
+        <div x-show="loading" class="p-12 text-center">
+          <div class="inline-block">
+            <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full"></div>
+            <p class="text-gray-500 mt-4">Loading accounts...</p>
+          </div>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Accounts Receivable</p>
-          <p class="text-3xl font-bold text-blue-400">$527.8K</p>
+
+        <div x-show="error && !loading" class="p-6 bg-red-50 border-l-4 border-red-500" style="display: none;">
+          <p class="text-red-800 font-medium" x-text="error"></p>
         </div>
-        <div class="bg-slate-800 border border-slate-700 rounded-xl p-6">
-          <p class="text-slate-400 text-sm mb-2">Profit Margin</p>
-          <p class="text-3xl font-bold text-purple-400">24.5%</p>
+
+        <div x-show="!loading && !error" class="overflow-x-auto">
+          <table class="w-full">
+            <thead class="bg-gray-50 border-b border-gray-200">
+              <tr>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Account #</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Account Name</th>
+                <th class="px-6 py-3 text-left text-sm font-medium text-gray-700">Type</th>
+                <th class="px-6 py-3 text-right text-sm font-medium text-gray-700">Balance</th>
+              </tr>
+            </thead>
+            <tbody>
+              <template x-for="account in accounts" :key="account.id">
+                <tr class="border-b border-gray-200 hover:bg-gray-50 transition-colors">
+                  <td class="px-6 py-4 text-sm text-gray-900 font-medium" x-text="account.account_number"></td>
+                  <td class="px-6 py-4 text-sm text-gray-600" x-text="account.account_name"></td>
+                  <td class="px-6 py-4 text-sm text-gray-600" x-text="account.account_type"></td>
+                  <td class="px-6 py-4 text-sm text-right font-bold" :class="account.balance >= 0 ? 'text-green-600' : 'text-red-600'" x-text="formatCurrency(account.balance)"></td>
+                </tr>
+              </template>
+
+              <template x-if="accounts.length === 0 && !loading && !error">
+                <tr>
+                  <td colspan="4" class="px-6 py-12 text-center">
+                    <p class="text-gray-500">No accounts configured.</p>
+                  </td>
+                </tr>
+              </template>
+            </tbody>
+          </table>
         </div>
       </div>
+
+      <div class="bg-white rounded-lg shadow overflow-hidden" x-data="reportsList()">
+        <div class="px-6 py-4 border-b border-gray-200">
+          <h2 class="text-lg font-semibold text-gray-900">Financial Reports</h2>
+          <p class="text-sm text-gray-500 mt-1">Recent income and balance reports</p>
+        </div>
+
+        <div x-show="loading" class="p-12 text-center">
+          <div class="animate-spin h-8 w-8 border-4 border-blue-500 border-t-transparent rounded-full mx-auto"></div>
+        </div>
+
+        <div x-show="!loading" class="grid grid-cols-1 md:grid-cols-2 gap-4 p-6">
+          <template x-for="report in reports" :key="report.id">
+            <div class="border border-gray-200 rounded-lg p-4 hover:border-blue-500 transition-colors">
+              <h3 class="font-semibold text-gray-900" x-text="report.report_name"></h3>
+              <p class="text-sm text-gray-600 mt-1" x-text="`Type: ${report.report_type}`"></p>
+              <div class="mt-4 flex items-center justify-between pt-4 border-t border-gray-100">
+                <span class="text-xs text-gray-500" x-text="`${formatDate(report.period_start)} to ${formatDate(report.period_end)}`"></span>
+                <span class="text-xs font-medium px-2 py-1 bg-blue-100 text-blue-800 rounded">View</span>
+              </div>
+            </div>
+          </template>
+
+          <template x-if="reports.length === 0 && !loading">
+            <div class="col-span-full text-center py-8">
+              <p class="text-gray-500">No reports available yet.</p>
+            </div>
+          </template>
+        </div>
+      </div>
+
     </main>
   </div>
 
-  <script define:vars={{ apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api' }}>
-    function moduleState() {
+  <script>
+    // 1. Declaración global para silenciar el error "Cannot find name Alpine"
+    declare const Alpine: any;
+
+    function financeStats() {
       return {
-        async init() {
-          await this.verifySession();
+        stats: {
+          cash_position: 0,
+          accounts_payable: 0,
+          accounts_receivable: 0,
+          profit_margin: 0,
         },
-        async verifySession() {
+        loading: true,
+
+        async init() {
+          await this.loadStats();
+        },
+
+        async loadStats() {
           try {
-            const response = await fetch(apiBase + '/auth/me', {
-              credentials: 'include',
-              headers: { 'X-Requested-With': 'XMLHttpRequest' }
-            });
-            if (response.status === 401 || response.status === 403) {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
               window.location.href = '/login';
+              return;
+            }
+
+            // Casting seguro para API_BASE
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/finance/stats', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            if (data.success) {
+              this.stats = data.data || this.stats;
             }
           } catch (err) {
-            console.error('[v0] Session check failed:', err);
-            window.location.href = '/login';
+            console.error('[v0] Finance stats error:', err);
+          } finally {
+            this.loading = false;
           }
-        }
+        },
+
+        // 2. Agregado tipo ': any' al parámetro
+        formatCurrency(value: any) {
+          return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+          }).format(value || 0);
+        },
       };
     }
-    document.addEventListener('DOMContentLoaded', async () => {
-      const state = moduleState();
-      await state.init();
+
+    function accountsList() {
+      return {
+        // 3. Tipado explícito para arrays vacíos
+        accounts: [] as any[],
+        loading: true,
+        // 4. Tipado para que acepte string o null
+        error: null as string | null,
+
+        async init() {
+          await this.loadAccounts();
+        },
+
+        async loadAccounts() {
+          try {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/finance/accounts', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) {
+              if (response.status === 401) window.location.href = '/login';
+              throw new Error(`HTTP ${response.status}`);
+            }
+
+            const data = await response.json();
+            if (data.success) {
+              this.accounts = data.data || [];
+            }
+          } catch (err) {
+            console.error('[v0] Accounts loading error:', err);
+            this.error = 'Failed to load accounts';
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        // 5. Agregado tipo ': any' al parámetro
+        formatCurrency(value: any) {
+          return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+          }).format(value || 0);
+        },
+      };
+    }
+
+    function reportsList() {
+      return {
+        reports: [] as any[],
+        loading: true,
+
+        async init() {
+          await this.loadReports();
+        },
+
+        async loadReports() {
+          try {
+            const token = sessionStorage.getItem('access_token');
+            if (!token) {
+              window.location.href = '/login';
+              return;
+            }
+
+            const apiBase = (window as any).API_BASE;
+            const response = await fetch(apiBase + '/v1/finance/reports', {
+              method: 'GET',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                'X-Requested-With': 'XMLHttpRequest',
+              },
+            });
+
+            if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+            const data = await response.json();
+            if (data.success) {
+              // Limitamos a 4 reportes
+              this.reports = (data.data || []).slice(0, 4);
+            }
+          } catch (err) {
+            console.error('[v0] Reports loading error:', err);
+          } finally {
+            this.loading = false;
+          }
+        },
+
+        // 6. Agregado tipo ': any' al parámetro
+        formatDate(date: any) {
+          return new Date(date).toLocaleDateString('en-US', {
+            year: 'numeric',
+            month: 'short',
+            day: 'numeric',
+          });
+        },
+      };
+    }
+
+    // Initialize
+    document.addEventListener('alpine:init', () => {
+      // Verificación de store segura
+      const appStore = Alpine.store('app');
+
+      if (appStore && appStore.authenticated) {
+        const stats = financeStats();
+        const accounts = accountsList();
+        const reports = reportsList();
+        
+        // Inicialización explícita
+        stats.init();
+        accounts.init();
+        reports.init();
+
+        Alpine.data('financeStats', () => stats);
+        Alpine.data('accountsList', () => accounts);
+        Alpine.data('reportsList', () => reports);
+      } else {
+        // Redirección si no hay sesión
+        window.location.href = '/login';
+      }
     });
   </script>
 </Layout>
