@@ -2,181 +2,170 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Models\Employee;
-use App\Models\Department;
-use App\Models\Attendance;
-use Illuminate\Http\Request;
+use App\Http\Controllers\Controller;
+use App\Models\Tenant;
+use Illuminate\Http\JsonResponse;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Log;
 
-class HRController extends ApiController
+/**
+ * Tenants API Controller
+ * 
+ * Maneja operaciones CRUD para organizaciones (tenants)
+ * Endpoint público: GET /api/v1/tenants (sin autenticación requerida para login)
+ */
+class TenantsController extends Controller
 {
     /**
-     * Get all employees
+     * Obtiene lista de todas las organizaciones activas
+     * 
+     * Endpoint: GET /api/v1/tenants
+     * 
+     * @return JsonResponse Lista de organizaciones disponibles
      */
-    public function getEmployees(Request $request)
+    public function list(): JsonResponse
     {
         try {
-            $tenantId = $request->user()->tenant_id;
-            $perPage = $request->input('per_page', 20);
+            // Intenta obtener del cache primero (5 minutos)
+            $tenants = Cache::remember('tenants:active', 300, function () {
+                return Tenant::where('is_active', true)
+                    ->where('status', 'active')
+                    ->select('id', 'name', 'slug', 'plan_type')
+                    ->orderBy('name', 'ASC')
+                    ->get()
+                    ->toArray();
+            });
 
-            $employees = Employee::where('tenant_id', $tenantId)
-                ->where('is_active', true)
-                ->with('department')
-                ->paginate($perPage);
-
-            return $this->success($employees, 'Employees retrieved successfully');
-        } catch (\Exception $e) {
-            Log::error('Error fetching employees', ['error' => $e->getMessage()]);
-            return $this->error('Failed to fetch employees', null, 500);
-        }
-    }
-
-    /**
-     * Get departments
-     */
-    public function getDepartments(Request $request)
-    {
-        try {
-            $tenantId = $request->user()->tenant_id;
-
-            $departments = Department::where('tenant_id', $tenantId)
-                ->where('is_active', true)
-                ->withCount('employees')
-                ->get();
-
-            return $this->success($departments, 'Departments retrieved successfully');
-        } catch (\Exception $e) {
-            Log::error('Error fetching departments', ['error' => $e->getMessage()]);
-            return $this->error('Failed to fetch departments', null, 500);
-        }
-    }
-
-    /**
-     * Create new employee
-     */
-    public function createEmployee(Request $request)
-    {
-        try {
-            $validated = $request->validate([
-                'first_name' => 'required|string|max:100',
-                'last_name' => 'required|string|max:100',
-                'email' => 'required|email|unique:employees,email',
-                'phone' => 'required|string|max:20',
-                'department_id' => 'required|integer|exists:departments,id',
-                'position' => 'required|string|max:100',
-                'salary' => 'required|numeric|min:0',
-                'hire_date' => 'required|date',
-            ]);
-
-            $tenantId = $request->user()->tenant_id;
-
-            // Verify department belongs to tenant
-            $department = Department::where('id', $validated['department_id'])
-                ->where('tenant_id', $tenantId)
-                ->first();
-
-            if (!$department) {
-                return $this->error('Department not found', null, 404);
+            // Si no hay organizaciones
+            if (empty($tenants)) {
+                Log::warning('No active tenants found');
+                return response()->json([
+                    'tenants' => [],
+                    'message' => 'No hay organizaciones disponibles',
+                ], 200);
             }
 
-            $employee = Employee::create([
-                'tenant_id' => $tenantId,
-                'first_name' => $validated['first_name'],
-                'last_name' => $validated['last_name'],
-                'email' => $validated['email'],
-                'phone' => $validated['phone'],
-                'department_id' => $validated['department_id'],
-                'position' => $validated['position'],
-                'salary' => $validated['salary'],
-                'hire_date' => $validated['hire_date'],
-                'is_active' => true,
-                'created_by' => $request->user()->id,
+            return response()->json([
+                'tenants' => $tenants,
+                'count' => count($tenants),
+            ], 200);
+
+        } catch (\Exception $e) {
+            Log::error('Error fetching tenants', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
             ]);
 
-            return $this->success($employee, 'Employee created successfully', 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->error('Validation failed', $e->errors(), 422);
-        } catch (\Exception $e) {
-            Log::error('Error creating employee', ['error' => $e->getMessage()]);
-            return $this->error('Failed to create employee', null, 500);
+            return response()->json([
+                'message' => 'Error al cargar las organizaciones',
+                'error' => 'internal_error',
+            ], 500);
         }
     }
 
     /**
-     * Record attendance
+     * Obtiene una organización específica por ID
+     * 
+     * Endpoint: GET /api/v1/tenants/{id}
+     * 
+     * @param string $id UUID del tenant
+     * @return JsonResponse Datos del tenant
      */
-    public function recordAttendance(Request $request)
+    public function show(string $id): JsonResponse
     {
         try {
-            $validated = $request->validate([
-                'employee_id' => 'required|integer|exists:employees,id',
-                'date' => 'required|date',
-                'status' => 'required|string|in:present,absent,late,excused',
-                'notes' => 'nullable|string',
-            ]);
-
-            $tenantId = $request->user()->tenant_id;
-
-            // Verify employee belongs to tenant
-            $employee = Employee::where('id', $validated['employee_id'])
-                ->where('tenant_id', $tenantId)
+            $tenant = Tenant::where('id', $id)
+                ->where('is_active', true)
                 ->first();
 
-            if (!$employee) {
-                return $this->error('Employee not found', null, 404);
+            if (!$tenant) {
+                return response()->json([
+                    'message' => 'Organización no encontrada',
+                    'error' => 'not_found',
+                ], 404);
             }
 
-            $attendance = Attendance::updateOrCreate(
-                [
-                    'employee_id' => $validated['employee_id'],
-                    'date' => $validated['date'],
+            return response()->json([
+                'tenant' => [
+                    'id' => $tenant->id,
+                    'name' => $tenant->name,
+                    'slug' => $tenant->slug,
+                    'plan_type' => $tenant->plan_type,
+                    'max_users' => $tenant->max_users,
+                    'max_storage_gb' => $tenant->max_storage_gb,
                 ],
-                [
-                    'tenant_id' => $tenantId,
-                    'status' => $validated['status'],
-                    'notes' => $validated['notes'],
-                ]
-            );
+            ], 200);
 
-            return $this->success($attendance, 'Attendance recorded successfully', 201);
-        } catch (\Illuminate\Validation\ValidationException $e) {
-            return $this->error('Validation failed', $e->errors(), 422);
         } catch (\Exception $e) {
-            Log::error('Error recording attendance', ['error' => $e->getMessage()]);
-            return $this->error('Failed to record attendance', null, 500);
+            Log::error('Error fetching tenant', [
+                'tenant_id' => $id,
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Error al cargar la organización',
+            ], 500);
         }
     }
 
     /**
-     * Get HR statistics
+     * Valida si una organización existe y está activa
+     * 
+     * Endpoint: POST /api/v1/tenants/validate
+     * 
+     * @return JsonResponse true/false si el tenant existe
      */
-    public function getStats(Request $request)
+    public function validate(): JsonResponse
     {
         try {
-            $tenantId = $request->user()->tenant_id;
+            $tenantId = request()->input('tenant_id');
 
-            $totalEmployees = Employee::where('tenant_id', $tenantId)
+            if (!$tenantId) {
+                return response()->json([
+                    'valid' => false,
+                    'message' => 'tenant_id requerido',
+                ], 400);
+            }
+
+            $exists = Tenant::where('id', $tenantId)
                 ->where('is_active', true)
-                ->count();
+                ->where('status', 'active')
+                ->exists();
 
-            $departments = Department::where('tenant_id', $tenantId)
-                ->count();
+            return response()->json([
+                'valid' => $exists,
+                'tenant_id' => $tenantId,
+            ], 200);
 
-            $todayAttendance = Attendance::where('tenant_id', $tenantId)
-                ->whereDate('date', today())
-                ->where('status', 'present')
-                ->count();
-
-            $stats = [
-                'total_employees' => $totalEmployees,
-                'total_departments' => $departments,
-                'today_attendance' => $todayAttendance,
-            ];
-
-            return $this->success($stats, 'HR statistics retrieved successfully');
         } catch (\Exception $e) {
-            Log::error('Error fetching HR stats', ['error' => $e->getMessage()]);
-            return $this->error('Failed to fetch statistics', null, 500);
+            Log::error('Error validating tenant', [
+                'error' => $e->getMessage(),
+            ]);
+
+            return response()->json([
+                'message' => 'Error validando organización',
+            ], 500);
+        }
+    }
+
+    /**
+     * Limpia el cache de tenants (solo admin)
+     * 
+     * @return JsonResponse
+     */
+    public function clearCache(): JsonResponse
+    {
+        try {
+            Cache::forget('tenants:active');
+
+            return response()->json([
+                'message' => 'Cache limpiado correctamente',
+            ], 200);
+
+        } catch (\Exception $e) {
+            return response()->json([
+                'message' => 'Error limpiando cache',
+            ], 500);
         }
     }
 }

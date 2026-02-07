@@ -2,6 +2,7 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\TenantController;
 
 /*
 |--------------------------------------------------------------------------
@@ -19,6 +20,10 @@ $apiPrefix = config('api-security.versioning.prefix', '/api/v') . $apiVersion;
 
 Route::prefix($apiVersion)->middleware(['api', 'secure-api'])->group(function () {
     // Public routes (no authentication required)
+    // Tenants endpoint - needed for login dropdown (public, no auth required)
+    Route::get('/tenants', [TenantController::class, 'index'])->name('tenants.index');
+    
+    // Auth routes
     Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
     Route::post('/auth/register', [AuthController::class, 'register'])->name('auth.register');
     Route::post('/auth/refresh', [AuthController::class, 'refresh'])->name('auth.refresh');
