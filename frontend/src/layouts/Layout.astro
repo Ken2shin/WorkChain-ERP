@@ -1,310 +1,138 @@
 ---
-import Alpine from 'alpinejs';
+import '../styles/globals.css';
 
-const { title = 'WorkChain ERP', description = 'Professional ERP for SMEs' } = Astro.props;
+interface Props {
+  title?: string;
+}
+
+const { title = 'WorkChain ERP' } = Astro.props as Props;
 ---
 
 <!doctype html>
-<html lang="en">
+<html lang="es">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="description" content={description} />
     <title>{title}</title>
-    <style is:global>
-      * {
-        margin: 0;
-        padding: 0;
-        box-sizing: border-box;
-      }
-
-      :root {
-        --color-primary: #1e40af;
-        --color-primary-light: #3b82f6;
-        --color-primary-dark: #1e3a8a;
-        --color-secondary: #7c3aed;
-        --color-danger: #dc2626;
-        --color-warning: #ea580c;
-        --color-success: #16a34a;
-        --color-neutral-50: #f9fafb;
-        --color-neutral-100: #f3f4f6;
-        --color-neutral-200: #e5e7eb;
-        --color-neutral-300: #d1d5db;
-        --color-neutral-400: #9ca3af;
-        --color-neutral-500: #6b7280;
-        --color-neutral-600: #4b5563;
-        --color-neutral-700: #374151;
-        --color-neutral-800: #1f2937;
-        --color-neutral-900: #111827;
-
-        --spacing-xs: 0.25rem;
-        --spacing-sm: 0.5rem;
-        --spacing-md: 1rem;
-        --spacing-lg: 1.5rem;
-        --spacing-xl: 2rem;
-        --spacing-2xl: 3rem;
-
-        --border-radius: 0.375rem;
-        --border-radius-lg: 0.5rem;
-        --border-radius-xl: 0.75rem;
-
-        --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
-        --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
-        --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
-
-        --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
-        --transition-base: 250ms cubic-bezier(0.4, 0, 0.2, 1);
-        --transition-slow: 350ms cubic-bezier(0.4, 0, 0.2, 1);
-      }
-
-      html {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu,
-          Cantarell, 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-        font-size: 16px;
-        line-height: 1.5;
-        color: var(--color-neutral-900);
-      }
-
-      body {
-        background-color: var(--color-neutral-50);
-      }
-
-      h1,
-      h2,
-      h3,
-      h4,
-      h5,
-      h6 {
-        font-weight: 600;
-        line-height: 1.2;
-      }
-
-      h1 {
-        font-size: 2rem;
-      }
-      h2 {
-        font-size: 1.75rem;
-      }
-      h3 {
-        font-size: 1.5rem;
-      }
-      h4 {
-        font-size: 1.25rem;
-      }
-      h5 {
-        font-size: 1.125rem;
-      }
-      h6 {
-        font-size: 1rem;
-      }
-
-      a {
-        color: var(--color-primary);
-        text-decoration: none;
-        transition: color var(--transition-fast);
-      }
-
-      a:hover {
-        color: var(--color-primary-light);
-      }
-
-      button,
-      input,
-      select,
-      textarea {
-        font: inherit;
-        color: inherit;
-      }
-
-      button {
-        cursor: pointer;
-      }
-
-      [x-cloak] {
-        display: none;
-      }
-    </style>
+    <meta name="description" content="Enterprise Resource Planning System" />
   </head>
-  <body x-data="appState()">
-    <!-- Loader -->
-    <div
-      x-show="loading"
-      class="fixed inset-0 flex items-center justify-center bg-black/50 z-50"
-      x-cloak
-    >
-      <div class="bg-white rounded-lg p-8 shadow-lg">
-        <div class="animate-spin">
-          <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <circle
-              class="opacity-25"
-              cx="12"
-              cy="12"
-              r="10"
-              stroke="currentColor"
-              stroke-width="4"
-            ></circle>
-            <path
-              class="opacity-75"
-              fill="currentColor"
-              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-            ></path>
-          </svg>
+
+  <body x-data="appState()" class="bg-gray-50 text-gray-900 font-sans antialiased">
+    <div x-show="$store.app.sidebarOpen" class="sidebar hidden md:block" style="display: none;">
+      <!-- Contenido sidebar -->
+    </div>
+
+    <main class="main-content min-h-screen">
+      <slot />
+    </main>
+
+    <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
+      <!-- Usamos div en vez de template y sin atributos con ':' para evitar parse errors en TS/VSCode -->
+      <div x-for="toast in $store.app.toasts" role="status" class="pointer-events-auto">
+        <div
+          x-bind="{ class: (toast.type === 'success' ? 'bg-green-600' : (toast.type === 'error' ? 'bg-red-600' : (toast.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'))) + ' px-4 py-3 rounded-lg shadow-lg text-white transform transition-all' }"
+          class="mb-2"
+        >
+          <span x-text="toast.message" class="text-sm font-medium"></span>
         </div>
       </div>
     </div>
 
-    <!-- Toast Notifications -->
-    <div class="fixed top-4 right-4 z-40 space-y-2">
-      <template x-for="toast in toasts" :key="toast.id">
-        <div
-          :class=`{
-            'bg-green-50 border border-green-200 text-green-800': toast.type === 'success',
-            'bg-red-50 border border-red-200 text-red-800': toast.type === 'error',
-            'bg-yellow-50 border border-yellow-200 text-yellow-800': toast.type === 'warning',
-            'bg-blue-50 border border-blue-200 text-blue-800': toast.type === 'info'
-          }`
-          class="px-4 py-3 rounded-lg shadow-md"
-          x-text="toast.message"
-        >
-        </div>
-      </template>
+    <div
+      x-show="$store.app.loading"
+      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]"
+      style="display: none;"
+    >
+      <div class="bg-white rounded-xl p-6 shadow-2xl flex flex-col items-center">
+        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
+        <p class="mt-4 text-gray-700 font-medium">Cargando...</p>
+      </div>
     </div>
 
-    <slot />
+    <!-- Script del cliente: Alpine.js (ES module). -->
+    <script type="module">
+      import Alpine from 'alpinejs';
 
-    <script
-      define:vars={{
-        apiBase: import.meta.env.PUBLIC_API_BASE || 'http://localhost:8000/api',
-      }}
-    >
-      // Global API base for all components
-      window.API_BASE = apiBase;
+      // Aseguramos que exista window.Alpine
+      window.Alpine = window.Alpine || Alpine;
 
-      // Initialize app state
-      function appState() {
-        return {
+      // Registramos stores y data al inicializar Alpine
+      document.addEventListener('alpine:init', () => {
+        Alpine.store('app', {
           loading: false,
-          toasts: [],
-          user: null,
+          sidebarOpen: true,
           authenticated: false,
+          user: null,
+          toasts: [],
 
-          async init() {
-            await this.checkAuth();
+          setLoading(val) {
+            this.loading = val;
           },
 
-          async checkAuth() {
-            try {
-              const userJson = sessionStorage.getItem('user');
-              const token = sessionStorage.getItem('access_token');
-              
-              if (userJson && token) {
-                this.user = JSON.parse(userJson);
-                this.authenticated = true;
-              } else {
-                this.authenticated = false;
-              }
-            } catch (error) {
-              console.error('Auth check error:', error);
-              this.logout();
-            }
+          toggleSidebar() {
+            this.sidebarOpen = !this.sidebarOpen;
           },
 
-          async apiCall(endpoint, method = 'GET', data = null) {
-            this.loading = true;
-            try {
-              const token = sessionStorage.getItem('access_token');
-              const options = {
-                method,
-                headers: {
-                  'Content-Type': 'application/json',
-                  'X-Requested-With': 'XMLHttpRequest',
-                },
-                credentials: 'include',
-              };
-
-              if (token) {
-                options.headers['Authorization'] = `Bearer ${token}`;
-              }
-
-              if (data) {
-                options.body = JSON.stringify(data);
-              }
-
-              const response = await fetch(window.API_BASE + endpoint, options);
-
-              // Si token expiró, intentar refrescarlo
-              if (response.status === 401) {
-                const refreshToken = sessionStorage.getItem('refresh_token');
-                if (refreshToken) {
-                  try {
-                    const refreshResponse = await fetch(window.API_BASE + '/v1/auth/refresh', {
-                      method: 'POST',
-                      headers: {
-                        'Content-Type': 'application/json',
-                        'X-Requested-With': 'XMLHttpRequest',
-                      },
-                      credentials: 'include',
-                      body: JSON.stringify({ refresh_token: refreshToken }),
-                    });
-
-                    if (refreshResponse.ok) {
-                      const refreshData = await refreshResponse.json();
-                      sessionStorage.setItem('access_token', refreshData.data.access_token);
-                      // Reintentar la solicitud original
-                      options.headers['Authorization'] = `Bearer ${refreshData.data.access_token}`;
-                      return fetch(window.API_BASE + endpoint, options);
-                    }
-                  } catch (error) {
-                    console.error('Token refresh error:', error);
-                  }
-                }
-                this.logout();
-                throw new Error('Session expired');
-              }
-
-              if (!response.ok) {
-                throw new Error(`HTTP ${response.status}`);
-              }
-
-              return await response.json();
-            } catch (error) {
-              this.showToast('Error: ' + error.message, 'error');
-              throw error;
-            } finally {
-              this.loading = false;
-            }
-          },
-
-          showToast(message, type = 'info', duration = 3000) {
+          addToast(message, type = 'info') {
             const id = Date.now();
             this.toasts.push({ id, message, type });
 
             setTimeout(() => {
               this.toasts = this.toasts.filter((t) => t.id !== id);
-            }, duration);
+            }, 3000);
+          },
+
+          setUser(user) {
+            this.user = user;
+            this.authenticated = !!user;
           },
 
           logout() {
-            sessionStorage.removeItem('access_token');
-            sessionStorage.removeItem('refresh_token');
-            sessionStorage.removeItem('user');
+            try {
+              sessionStorage.removeItem('access_token');
+              sessionStorage.removeItem('user');
+            } catch (e) {
+              console.warn('No se pudo limpiar sessionStorage', e);
+            }
             this.user = null;
             this.authenticated = false;
             window.location.href = '/login';
+          }
+        });
+
+        Alpine.data('appState', () => ({
+          init() {
+            this.checkAuth();
           },
-        };
-      }
 
-      // Initialize Alpine
-      document.addEventListener('alpine:init', () => {
-        Alpine.store('app', appState());
-        Alpine.store('app').init();
+          async checkAuth() {
+            try {
+              const token = sessionStorage.getItem('access_token');
+              const userStr = sessionStorage.getItem('user');
+              const path = window.location.pathname;
+
+              if (token && userStr) {
+                try {
+                  this.$store.app.setUser(JSON.parse(userStr));
+                } catch (e) {
+                  console.error('Error parsing user data', e);
+                }
+              } else {
+                if (path !== '/login' && path !== '/') {
+                  window.location.href = '/login';
+                }
+              }
+            } catch (e) {
+              console.error('Error en checkAuth', e);
+            }
+          }
+        }));
       });
-    </script>
 
-    <script>
-      import Alpine from 'alpinejs';
-      Alpine.start();
+      // Iniciamos Alpine si aún no está iniciado
+      if (!window.Alpine || !window.Alpine.started) {
+        Alpine.start();
+      }
     </script>
   </body>
 </html>
