@@ -6,6 +6,7 @@ import Layout from '../layouts/Layout.astro';
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
       <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8">
+        
         <div class="text-center mb-8">
           <div class="mb-4">
             <svg class="w-16 h-16 mx-auto text-blue-500" fill="currentColor" viewBox="0 0 24 24">
@@ -17,6 +18,7 @@ import Layout from '../layouts/Layout.astro';
         </div>
 
         <form x-data="loginForm" @submit.prevent="submit" class="space-y-4">
+          
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">Organización</label>
             <select
@@ -78,7 +80,6 @@ import Layout from '../layouts/Layout.astro';
 <script>
   import { getApiBaseUrl } from '../lib/alpine-store';
 
-  // Declaración global para Alpine
   declare global {
     interface Window {
       Alpine: any;
@@ -103,12 +104,15 @@ import Layout from '../layouts/Layout.astro';
       async loadTenants() {
         try {
           const baseUrl = getApiBaseUrl();
+          // Aseguramos compatibilidad con el endpoint
           const response = await fetch(`${baseUrl}/tenants`);
           
           if (response.ok) {
-            const data = await response.json();
-            // Mapeo seguro para evitar errores de tipo
-            this.organizations = (data.data || []).map((t: any) => ({
+            const result = await response.json();
+            // Lógica para detectar la estructura de la respuesta (data.data, data.tenants, etc.)
+            const list = result.data || result.tenants || result || [];
+            
+            this.organizations = list.map((t: any) => ({
               id: String(t.id),
               name: t.name
             }));
@@ -137,10 +141,20 @@ import Layout from '../layouts/Layout.astro';
           const data = await response.json();
 
           if (response.ok) {
-            sessionStorage.setItem('access_token', data.data.access_token);
-            sessionStorage.setItem('user', JSON.stringify(data.data.user));
-            // @ts-ignore
-            window.Alpine.store('app').setUser(data.data.user);
+            // Manejamos la respuesta si viene en 'data' o directa
+            const authData = data.data || data;
+            
+            sessionStorage.setItem('access_token', authData.access_token);
+            if(authData.user) {
+              sessionStorage.setItem('user', JSON.stringify(authData.user));
+              // Actualizamos el store global
+              // @ts-ignore
+              if(window.Alpine.store('app')) {
+                 // @ts-ignore
+                 window.Alpine.store('app').setUser(authData.user);
+              }
+            }
+            
             window.location.href = '/dashboard';
           } else {
             this.form.error = data.message || 'Error de autenticación';

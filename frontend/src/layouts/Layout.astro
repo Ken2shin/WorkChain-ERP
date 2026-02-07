@@ -1,11 +1,15 @@
 ---
-import '../app/globals.css';
+import '../styles/globals.css';
 
 interface Props {
   title?: string;
+  description?: string;
 }
 
-const { title = 'WorkChain ERP' } = Astro.props as Props;
+const {
+  title = 'WorkChain ERP',
+  description = 'Professional ERP for SMEs'
+} = Astro.props as Props;
 ---
 
 <!doctype html>
@@ -13,126 +17,10 @@ const { title = 'WorkChain ERP' } = Astro.props as Props;
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description" content={description} />
     <title>{title}</title>
-    <meta name="description" content="Enterprise Resource Planning System" />
   </head>
-
-  <body x-data="appState()" class="bg-gray-50 text-gray-900 font-sans antialiased">
-    <div x-show="$store.app.sidebarOpen" class="sidebar hidden md:block" style="display: none;">
-      <!-- Contenido sidebar -->
-    </div>
-
-    <main class="main-content min-h-screen">
-      <slot />
-    </main>
-
-    <div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2 pointer-events-none">
-      <!-- Usamos div en vez de template y sin atributos con ':' para evitar parse errors en TS/VSCode -->
-      <div x-for="toast in $store.app.toasts" role="status" class="pointer-events-auto">
-        <div
-          x-bind="{ class: (toast.type === 'success' ? 'bg-green-600' : (toast.type === 'error' ? 'bg-red-600' : (toast.type === 'warning' ? 'bg-yellow-500' : 'bg-blue-500'))) + ' px-4 py-3 rounded-lg shadow-lg text-white transform transition-all' }"
-          class="mb-2"
-        >
-          <span x-text="toast.message" class="text-sm font-medium"></span>
-        </div>
-      </div>
-    </div>
-
-    <div
-      x-show="$store.app.loading"
-      class="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[100]"
-      style="display: none;"
-    >
-      <div class="bg-white rounded-xl p-6 shadow-2xl flex flex-col items-center">
-        <div class="animate-spin rounded-full h-10 w-10 border-4 border-blue-600 border-t-transparent"></div>
-        <p class="mt-4 text-gray-700 font-medium">Cargando...</p>
-      </div>
-    </div>
-
-    <!-- Script del cliente: Alpine.js (ES module). -->
-    <script type="module">
-      import Alpine from 'alpinejs';
-
-      // Aseguramos que exista window.Alpine
-      window.Alpine = window.Alpine || Alpine;
-
-      // Registramos stores y data al inicializar Alpine
-      document.addEventListener('alpine:init', () => {
-        Alpine.store('app', {
-          loading: false,
-          sidebarOpen: true,
-          authenticated: false,
-          user: null,
-          toasts: [],
-
-          setLoading(val) {
-            this.loading = val;
-          },
-
-          toggleSidebar() {
-            this.sidebarOpen = !this.sidebarOpen;
-          },
-
-          addToast(message, type = 'info') {
-            const id = Date.now();
-            this.toasts.push({ id, message, type });
-
-            setTimeout(() => {
-              this.toasts = this.toasts.filter((t) => t.id !== id);
-            }, 3000);
-          },
-
-          setUser(user) {
-            this.user = user;
-            this.authenticated = !!user;
-          },
-
-          logout() {
-            try {
-              sessionStorage.removeItem('access_token');
-              sessionStorage.removeItem('user');
-            } catch (e) {
-              console.warn('No se pudo limpiar sessionStorage', e);
-            }
-            this.user = null;
-            this.authenticated = false;
-            window.location.href = '/login';
-          }
-        });
-
-        Alpine.data('appState', () => ({
-          init() {
-            this.checkAuth();
-          },
-
-          async checkAuth() {
-            try {
-              const token = sessionStorage.getItem('access_token');
-              const userStr = sessionStorage.getItem('user');
-              const path = window.location.pathname;
-
-              if (token && userStr) {
-                try {
-                  this.$store.app.setUser(JSON.parse(userStr));
-                } catch (e) {
-                  console.error('Error parsing user data', e);
-                }
-              } else {
-                if (path !== '/login' && path !== '/') {
-                  window.location.href = '/login';
-                }
-              }
-            } catch (e) {
-              console.error('Error en checkAuth', e);
-            }
-          }
-        }));
-      });
-
-      // Iniciamos Alpine si aún no está iniciado
-      if (!window.Alpine || !window.Alpine.started) {
-        Alpine.start();
-      }
-    </script>
+  <body class="min-h-screen bg-gray-100 text-gray-900">
+    <slot />
   </body>
 </html>
