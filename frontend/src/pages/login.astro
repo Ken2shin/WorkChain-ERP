@@ -5,7 +5,7 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Login - WorkChain ERP">
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
-      <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8">
+      <div x-data="loginForm" class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8">
         
         <div class="text-center mb-8">
           <div class="mb-4">
@@ -17,13 +17,42 @@ import Layout from '../layouts/Layout.astro';
           <p class="text-slate-400">Sistema de Gestión Empresarial</p>
         </div>
 
-        <form x-data="loginForm" @submit.prevent="submit" class="space-y-4">
+        <div class="mb-6">
+            <div x-show="serverStatus === 'checking'" class="p-3 bg-blue-500 bg-opacity-10 border border-blue-500 rounded-lg flex items-center gap-3">
+                <svg class="animate-spin h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                <div class="text-sm text-blue-300">
+                    <p class="font-bold">Conectando con el Backend...</p>
+                    <p class="text-xs opacity-75">Despertando servidor (puede tardar 1 min)...</p>
+                </div>
+            </div>
+
+            <div x-show="serverStatus === 'error'" style="display: none;" class="p-3 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg">
+                <div class="flex items-center gap-3 mb-2">
+                    <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span class="text-sm text-red-400 font-bold">No se pudo conectar</span>
+                </div>
+                <p class="text-xs text-red-300 mb-3">El servidor no responde. Verifica tu internet o si el backend está caído.</p>
+                <button @click="loadTenants()" class="w-full py-1 px-3 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition">
+                    Reintentar Conexión
+                </button>
+            </div>
+
+             <div x-show="serverStatus === 'connected'" style="display: none;" class="p-2 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg text-center mb-4">
+                <p class="text-xs text-green-400 font-bold">✅ Conexión establecida</p>
+            </div>
+        </div>
+
+        <form @submit.prevent="submit" class="space-y-4">
           
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">Organización</label>
             <select
               x-model="form.tenantId"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition"
+              :disabled="serverStatus !== 'connected'"
+              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
               required
             >
               <option value="" disabled>Selecciona una organización</option>
@@ -38,8 +67,9 @@ import Layout from '../layouts/Layout.astro';
             <input
               type="email"
               x-model="form.email"
+              :disabled="serverStatus !== 'connected'"
               placeholder="usuario@example.com"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition disabled:opacity-50"
               required
             />
           </div>
@@ -49,8 +79,9 @@ import Layout from '../layouts/Layout.astro';
             <input
               type="password"
               x-model="form.password"
+              :disabled="serverStatus !== 'connected'"
               placeholder="••••••••"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition disabled:opacity-50"
               required
             />
           </div>
@@ -61,8 +92,8 @@ import Layout from '../layouts/Layout.astro';
 
           <button
             type="submit"
-            :disabled="form.submitting"
-            class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition"
+            :disabled="form.submitting || serverStatus !== 'connected'"
+            class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition"
           >
             <span x-show="!form.submitting">Iniciar Sesión</span>
             <span x-show="form.submitting">Cargando...</span>
@@ -88,6 +119,9 @@ import Layout from '../layouts/Layout.astro';
 
   document.addEventListener('alpine:init', () => {
     window.Alpine.data('loginForm', () => ({
+      // Estados: 'checking' | 'connected' | 'error'
+      serverStatus: 'checking', 
+      
       form: {
         email: '',
         password: '',
@@ -98,54 +132,49 @@ import Layout from '../layouts/Layout.astro';
       organizations: [] as { id: string; name: string }[],
 
       async init() {
-        console.log('%c🚀 INICIANDO LOGIN FORM', 'color: cyan; font-weight: bold;');
+        // Forzamos visualmente el estado checking al inicio
+        this.serverStatus = 'checking';
+        console.log('🚀 Iniciando Login y verificando Render...');
         await this.loadTenants();
       },
 
       async loadTenants() {
+        this.serverStatus = 'checking'; 
+        
         try {
           const baseUrl = getApiBaseUrl();
-          const targetUrl = `${baseUrl}/tenants`;
-          
-          console.log(`%c📡 CONECTANDO AL BACKEND...`, 'color: yellow;');
-          console.log(`URL Objetivo: ${targetUrl}`);
+          console.log(`📡 Ping a: ${baseUrl}/tenants`);
 
-          const response = await fetch(targetUrl);
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 segundos timeout
+
+          const response = await fetch(`${baseUrl}/tenants`, {
+            signal: controller.signal
+          });
           
-          console.log(`%c📥 RESPUESTA RECIBIDA`, 'color: green;');
-          console.log(`Status HTTP: ${response.status}`);
+          clearTimeout(timeoutId);
 
           if (response.ok) {
             const result = await response.json();
-            
-            // --- AQUÍ ESTÁ LA CLAVE: VER QUÉ LLEGA REALMENTE ---
-            console.log('%c📦 DATOS CRUDOS DEL BACKEND:', 'background: #222; color: #bada55', result);
-            
-            // Lógica para detectar la estructura de la respuesta
             const list = result.data || result.tenants || result || [];
             
-            console.log('📋 Lista interpretada por el frontend:', list);
-            
-            if (Array.isArray(list)) {
-                console.log(`✅ Se encontraron ${list.length} organizaciones.`);
-            } else {
-                console.error('❌ ERROR: La lista interpretada NO es un array. Es:', typeof list);
-            }
-
             this.organizations = list.map((t: any) => ({
               id: String(t.id),
               name: t.name
             }));
             
-            console.log('✅ Organizations final en Alpine:', JSON.parse(JSON.stringify(this.organizations)));
+            // Retraso artificial pequeño para que el usuario vea el check verde
+            setTimeout(() => {
+                this.serverStatus = 'connected';
+            }, 500);
 
           } else {
-            console.error('❌ ERROR HTTP: El backend respondió con error.');
-            console.log('Status Text:', response.statusText);
+            console.error('❌ Error HTTP:', response.status);
+            this.serverStatus = 'error';
           }
         } catch (error) {
-          console.error('%c❌ ERROR CRÍTICO DE CONEXIÓN', 'color: red; font-size: 14px;');
-          console.error('No se recibió NADA del backend o la URL está mal.', error);
+          console.error('❌ Error de conexión:', error);
+          this.serverStatus = 'error';
         }
       },
 
@@ -155,8 +184,6 @@ import Layout from '../layouts/Layout.astro';
 
         try {
           const baseUrl = getApiBaseUrl();
-          console.log('🚀 Enviando credenciales...');
-          
           const response = await fetch(`${baseUrl}/auth/login`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -168,7 +195,6 @@ import Layout from '../layouts/Layout.astro';
           });
 
           const data = await response.json();
-          console.log('📥 Respuesta Login:', data);
 
           if (response.ok) {
             const authData = data.data || data;
@@ -182,14 +208,11 @@ import Layout from '../layouts/Layout.astro';
                  window.Alpine.store('app').setUser(authData.user);
               }
             }
-            
             window.location.href = '/dashboard';
           } else {
             this.form.error = data.message || 'Error de autenticación';
-            console.warn('⚠️ Login fallido:', this.form.error);
           }
         } catch (error) {
-          console.error('❌ Error de red en Login:', error);
           this.form.error = 'Error de conexión con el servidor';
         } finally {
           this.form.submitting = false;
