@@ -19,29 +19,25 @@ export interface User {
   name: string;
   email: string;
   role: string;
-  tenant_id: string; // UUID string
+  tenant_id: string;
 }
 
-interface AppState {
-  loading: boolean;
-  authenticated: boolean;
-  user: User | null;
-  currentTenant: string | null;
-  sidebarOpen: boolean;
-  toasts: Toast[];
-}
+// Configuración de llaves para evitar errores de tipeo
+const STORAGE_KEYS = {
+  TOKEN: 'access_token', // Alineado con tu Login
+  USER: 'user',
+  TENANT: 'current_tenant'
+};
 
 /**
  * Inicializa el store global de Alpine
- * Debe ser llamado en Layout.astro con alpine:init
  */
 export function initializeAlpineStore(alpine: Alpine) {
-  // Store Global de Aplicación
   alpine.store('app', {
     loading: false,
-    authenticated: !!localStorage.getItem('auth_token'),
-    user: null,
-    currentTenant: localStorage.getItem('current_tenant'),
+    // Usamos sessionStorage para coincidir con tu Login
+    authenticated: !!sessionStorage.getItem(STORAGE_KEYS.TOKEN),
+    user: JSON.parse(sessionStorage.getItem(STORAGE_KEYS.USER) || 'null'),
     sidebarOpen: true,
     toasts: [] as Toast[],
 
@@ -56,11 +52,9 @@ export function initializeAlpineStore(alpine: Alpine) {
 
       if (duration > 0) {
         setTimeout(() => {
-          // CORRECCIÓN 1: Tipado explícito de 't'
-          this.toasts = this.toasts.filter((t: Toast) => t.id !== id);
+          this.removeToast(id);
         }, duration);
       }
-
       return id;
     },
 
@@ -68,13 +62,9 @@ export function initializeAlpineStore(alpine: Alpine) {
      * Remueve un toast específico
      */
     removeToast(id: string) {
-      // CORRECCIÓN 2: Tipado explícito de 't'
       this.toasts = this.toasts.filter((t: Toast) => t.id !== id);
     },
 
-    /**
-     * Limpia todos los toasts
-     */
     clearToasts() {
       this.toasts = [];
     },
@@ -85,45 +75,48 @@ export function initializeAlpineStore(alpine: Alpine) {
     setUser(user: User | null) {
       this.user = user;
       this.authenticated = !!user;
+      
+      if (user) {
+        sessionStorage.setItem(STORAGE_KEYS.USER, JSON.stringify(user));
+      } else {
+        sessionStorage.removeItem(STORAGE_KEYS.USER);
+      }
     },
 
     /**
      * Cierra sesión
      */
     logout() {
-      localStorage.removeItem('auth_token');
-      localStorage.removeItem('refresh_token');
-      localStorage.removeItem('current_tenant');
+      sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
+      sessionStorage.removeItem(STORAGE_KEYS.USER);
+      sessionStorage.removeItem(STORAGE_KEYS.TENANT);
+      
       this.user = null;
       this.authenticated = false;
-      this.currentTenant = null;
-      window.location.href = '/login';
+      
+      window.location.href = '/'; // O a /login
     },
   });
 }
 
 /**
  * Obtiene la URL de la API desde variables de entorno
- * SIN hardcodeo de puertos
  */
 export function getApiBaseUrl(): string {
-  const baseUrl = import.meta.env.PUBLIC_API_BASE;
+  // Soporte para Vite/Astro
+  const baseUrl = import.meta.env.PUBLIC_API_URL || import.meta.env.PUBLIC_API_BASE;
 
   if (!baseUrl) {
-    console.error(
-      '[v0] PUBLIC_API_BASE no está configurada. Verifica tu archivo .env'
-    );
-    return '';
+    console.warn('[Store] PUBLIC_API_URL no definida. Usando localhost por defecto.');
+    return 'http://localhost:8000'; // Fallback seguro para desarrollo
   }
 
-  // Asegura que no haya doble slash al final
   return baseUrl.replace(/\/$/, '');
 }
 
 /**
  * Realiza una llamada API segura
- * Incluye el token JWT automáticamente
- * USA PUBLIC_API_BASE, NO puertos hardcodeados
+ * Maneja automáticamente JSON vs FormData y el Token
  */
 export async function fetchApi(
   endpoint: string,
@@ -131,18 +124,19 @@ export async function fetchApi(
 ): Promise<Response> {
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
+  const token = sessionStorage.getItem(STORAGE_KEYS.TOKEN);
 
-  const token = localStorage.getItem('auth_token');
+  // Gestión inteligente de Headers
+  const headers = new Headers(options.headers || {});
 
-  // CORRECCIÓN 3: Uso de Record<string, string> para evitar error de índice
-  // Esto permite asignar 'Authorization' sin problemas.
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    ...(options.headers as Record<string, string> || {}),
-  };
+  // Solo agregamos Content-Type: json si NO estamos enviando un archivo (FormData)
+  // y si el usuario no ha especificado ya otro Content-Type.
+  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
+    headers.set('Content-Type', 'application/json');
+  }
 
   if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+    headers.set('Authorization', `Bearer ${token}`);
   }
 
   try {
@@ -151,36 +145,16 @@ export async function fetchApi(
       headers,
     });
 
-    // Si es 401, el token expiró
     if (response.status === 401) {
-      localStorage.removeItem('auth_token');
-      window.location.href = '/login';
+      console.warn('[API] Sesión expirada (401)');
+      // Opcional: Llamar a logout() o redirigir
+      sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
+      window.location.href = '/'; 
     }
 
     return response;
   } catch (error) {
-    console.error('[v0] Error en llamada API:', error);
+    console.error('[API] Error de red:', error);
     throw error;
   }
-}
-
-/**
- * Valida que el ambiente esté correctamente configurado
- */
-export function validateEnvironment(): boolean {
-  const baseUrl = import.meta.env.PUBLIC_API_BASE;
-
-  if (!baseUrl) {
-    console.error('[v0] PUBLIC_API_BASE no está configurada en .env');
-    return false;
-  }
-
-  // Advertencia si está usando localhost en producción
-  if (baseUrl.includes('localhost') && import.meta.env.PROD) {
-    console.warn(
-      '[v0] Advertencia: PUBLIC_API_BASE apunta a localhost en producción'
-    );
-  }
-
-  return true;
 }
