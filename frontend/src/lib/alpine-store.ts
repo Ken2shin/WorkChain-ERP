@@ -16,15 +16,15 @@ export interface Toast {
 
 export interface User {
   id: string;
-  name: string;
+  name?: string;
   email: string;
   role: string;
   tenant_id: string;
 }
 
-// Configuración de llaves para evitar errores de tipeo
+// Configuración de llaves
 const STORAGE_KEYS = {
-  TOKEN: 'access_token', // Alineado con tu Login
+  TOKEN: 'access_token',
   USER: 'user',
   TENANT: 'current_tenant'
 };
@@ -35,19 +35,15 @@ const STORAGE_KEYS = {
 export function initializeAlpineStore(alpine: Alpine) {
   alpine.store('app', {
     loading: false,
-    // Usamos sessionStorage para coincidir con tu Login
+    // Leemos el estado inicial desde sessionStorage (que rellenamos en el Login)
     authenticated: !!sessionStorage.getItem(STORAGE_KEYS.TOKEN),
     user: JSON.parse(sessionStorage.getItem(STORAGE_KEYS.USER) || 'null'),
     sidebarOpen: true,
     toasts: [] as Toast[],
 
-    /**
-     * Agrega un toast a la pila
-     */
     addToast(message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info', duration = 3000) {
       const id = Math.random().toString(36).substr(2, 9);
       const toast: Toast = { id, message, type, duration };
-
       this.toasts.push(toast);
 
       if (duration > 0) {
@@ -58,9 +54,6 @@ export function initializeAlpineStore(alpine: Alpine) {
       return id;
     },
 
-    /**
-     * Remueve un toast específico
-     */
     removeToast(id: string) {
       this.toasts = this.toasts.filter((t: Toast) => t.id !== id);
     },
@@ -69,9 +62,6 @@ export function initializeAlpineStore(alpine: Alpine) {
       this.toasts = [];
     },
 
-    /**
-     * Establece el usuario autenticado
-     */
     setUser(user: User | null) {
       this.user = user;
       this.authenticated = !!user;
@@ -83,9 +73,6 @@ export function initializeAlpineStore(alpine: Alpine) {
       }
     },
 
-    /**
-     * Cierra sesión
-     */
     logout() {
       sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
       sessionStorage.removeItem(STORAGE_KEYS.USER);
@@ -94,67 +81,10 @@ export function initializeAlpineStore(alpine: Alpine) {
       this.user = null;
       this.authenticated = false;
       
-      window.location.href = '/'; // O a /login
+      // Opcional: Limpiar sesión de Supabase también
+      // import { supabase } from './supabase'; supabase.auth.signOut();
+      
+      window.location.href = '/'; 
     },
   });
-}
-
-/**
- * Obtiene la URL de la API desde variables de entorno
- */
-export function getApiBaseUrl(): string {
-  // Soporte para Vite/Astro
-  const baseUrl = import.meta.env.PUBLIC_API_URL || import.meta.env.PUBLIC_API_BASE;
-
-  if (!baseUrl) {
-    console.warn('[Store] PUBLIC_API_URL no definida. Usando localhost por defecto.');
-    return 'http://localhost:8000'; // Fallback seguro para desarrollo
-  }
-
-  return baseUrl.replace(/\/$/, '');
-}
-
-/**
- * Realiza una llamada API segura
- * Maneja automáticamente JSON vs FormData y el Token
- */
-export async function fetchApi(
-  endpoint: string,
-  options: RequestInit = {}
-): Promise<Response> {
-  const baseUrl = getApiBaseUrl();
-  const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
-  const token = sessionStorage.getItem(STORAGE_KEYS.TOKEN);
-
-  // Gestión inteligente de Headers
-  const headers = new Headers(options.headers || {});
-
-  // Solo agregamos Content-Type: json si NO estamos enviando un archivo (FormData)
-  // y si el usuario no ha especificado ya otro Content-Type.
-  if (!headers.has('Content-Type') && !(options.body instanceof FormData)) {
-    headers.set('Content-Type', 'application/json');
-  }
-
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
-
-  try {
-    const response = await fetch(url, {
-      ...options,
-      headers,
-    });
-
-    if (response.status === 401) {
-      console.warn('[API] Sesión expirada (401)');
-      // Opcional: Llamar a logout() o redirigir
-      sessionStorage.removeItem(STORAGE_KEYS.TOKEN);
-      window.location.href = '/'; 
-    }
-
-    return response;
-  } catch (error) {
-    console.error('[API] Error de red:', error);
-    throw error;
-  }
 }

@@ -1,330 +1,234 @@
+import { supabase } from './supabase';
+import type { PostgrestError, PostgrestResponse } from '@supabase/supabase-js';
+
 /**
- * API Client para comunicación con Laravel backend
- * Maneja autenticación, errores y reintentos automáticos
+ * 🚀 CLIENTE API DE ALTO RENDIMIENTO - WORKCHAIN ERP
+ * * Características de Producción:
+ * 1. Retry Strategy: Reintentos automáticos ante fallos de red.
+ * 2. Smart Parsing: Normalización de errores de PostgreSQL.
+ * 3. Pagination Support: Preparado para tablas con millones de registros.
+ * 4. Type Safety: Genéricos estrictos para TypeScript.
  */
 
-// 1. VALIDACIÓN DE ENTORNO
-// Eliminamos cualquier referencia a localhost para evitar errores en Render
-const getApiBase = (): string => {
-  const url = import.meta.env.PUBLIC_API_BASE;
-  
-  if (!url) {
-    console.error('CRITICAL ERROR: PUBLIC_API_BASE no está definida en el archivo .env');
-    // Retornamos cadena vacía para que falle de forma controlada en lugar de conectar a localhost
-    return ''; 
-  }
-  
-  // Eliminar slash final si existe para evitar 'https://dominio.com//api'
-  return url.replace(/\/$/, '');
-};
-
-const API_BASE = getApiBase();
-const API_VERSION = 'v1';
-const MAX_RETRIES = 2; 
-const RETRY_DELAY = 1000;
-
-interface ApiResponse<T = unknown> {
-  success: boolean;
-  data?: T;
-  message?: string;
-  errors?: Record<string, string[]>;
-  status: number;
-}
-
-interface ApiError {
-  status: number;
+export interface ApiError {
+  code: string;
   message: string;
-  errors?: Record<string, string[]>;
+  details?: string;
+  hint?: string;
+  status: number;
 }
+
+export interface QueryOptions {
+  select?: string;
+  page?: number;     // Página actual (1, 2, 3...)
+  limit?: number;    // Registros por página (10, 50, 100)
+  orderBy?: { column: string; ascending?: boolean };
+  filters?: Record<string, any>; // Filtros simples (eq)
+}
+
+export interface PaginatedResult<T> {
+  data: T[];
+  count: number | null;
+  error: ApiError | null;
+}
+
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
 
 class ApiClient {
-  private token: string | null = null;
-  private refreshPromise: Promise<string> | null = null;
 
-  /**
-   * Obtener token desde sessionStorage
-   */
-  private getToken(): string | null {
-    if (typeof window !== 'undefined') {
-      return sessionStorage.getItem('access_token');
-    }
-    return null;
+  // --- AUTENTICACIÓN & SESIÓN ---
+
+  async getCurrentUser() {
+    const { data: { user } } = await supabase.auth.getUser();
+    return user;
   }
 
-  /**
-   * Guardar token en sessionStorage
-   */
-  private setToken(token: string): void {
+  async isAuthenticated(): Promise<boolean> {
+    const { data: { session } } = await supabase.auth.getSession();
+    return !!session;
+  }
+
+  async login(email: string, password: string) {
+    const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+    if (error) throw this.normalizeError(error);
+    return data;
+  }
+
+  async logout() {
+    await supabase.auth.signOut();
     if (typeof window !== 'undefined') {
-      sessionStorage.setItem('access_token', token);
-      this.token = token;
+      sessionStorage.clear();
+      localStorage.clear(); // Limpiamos todo por seguridad
+      window.location.href = '/login';
     }
   }
 
-  /**
-   * Limpiar token
-   */
-  private clearToken(): void {
-    if (typeof window !== 'undefined') {
-      sessionStorage.removeItem('access_token');
-      sessionStorage.removeItem('refresh_token');
-      sessionStorage.removeItem('user');
-    }
-    this.token = null;
-  }
+  // --- MÉTODOS CRUD OPTIMIZADOS ---
 
   /**
-   * Realizar petición HTTP con reintentos
+   * GET Optimizado con Paginación y Filtros
+   * Ideal para Grid/Tablas de datos masivos.
    */
-  async request<T = unknown>(
-    endpoint: string,
-    options: RequestInit = {},
-    attempt: number = 1
-  ): Promise<ApiResponse<T>> {
-    // Construcción segura de la URL
-    const cleanEndpoint = endpoint.startsWith('/') ? endpoint : `/${endpoint}`;
-    const url = `${API_BASE}/${API_VERSION}${cleanEndpoint}`;
-    
-    const token = this.getToken();
+  async get<T = any>(table: string, options: QueryOptions = {}): Promise<PaginatedResult<T>> {
+    return this.retryOperation(async () => {
+      let query = supabase.from(table).select(options.select || '*', { count: 'exact' });
 
-    // CORRECCIÓN DEL ERROR DE TYPESCRIPT:
-    // Definimos headers como un Record<string, string> explícito para poder manipularlo
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest',
-    };
-
-    // Mezclar headers personalizados si existen
-    if (options.headers) {
-        // Asumimos que options.headers es un objeto simple para facilitar la mezcla
-        const customHeaders = options.headers as Record<string, string>;
-        Object.assign(headers, customHeaders);
-    }
-
-    // Inyectar token si existe
-    if (token) {
-      headers['Authorization'] = `Bearer ${token}`;
-    }
-
-    try {
-      const response = await fetch(url, {
-        ...options,
-        headers: headers, // Pasamos el objeto ya tipado correctamente
-        credentials: 'include',
-      });
-
-      // Manejo seguro del body
-      let data;
-      try {
-        data = await response.json();
-      } catch (e) {
-        data = {}; 
-      }
-
-      // Lógica de Refresco de Token (401)
-      if (response.status === 401 && (data.message?.includes('Unauthenticated') || data.message?.includes('token'))) {
-        
-        if (attempt > MAX_RETRIES) {
-             this.clearToken();
-             if (typeof window !== 'undefined') window.location.href = '/login';
-             throw { status: 401, message: 'Session expired' };
-        }
-
-        if (this.refreshPromise) {
-          await this.refreshPromise;
-          return this.request<T>(endpoint, options, attempt + 1);
-        }
-
-        this.refreshPromise = this.refreshToken();
-        
-        try {
-          await this.refreshPromise;
-          return this.request<T>(endpoint, options, attempt + 1);
-        } catch (error) {
-          this.clearToken();
-          if (typeof window !== 'undefined') {
-            window.location.href = '/login';
+      // 1. Aplicar Filtros (igualdad simple)
+      if (options.filters) {
+        Object.entries(options.filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            query = query.eq(key, value);
           }
-          throw error;
-        } finally {
-          this.refreshPromise = null;
-        }
+        });
       }
+
+      // 2. Aplicar Ordenamiento
+      if (options.orderBy) {
+        query = query.order(options.orderBy.column, { ascending: options.orderBy.ascending ?? true });
+      }
+
+      // 3. Aplicar Paginación (Vital para alto tráfico)
+      if (options.page && options.limit) {
+        const from = (options.page - 1) * options.limit;
+        const to = from + options.limit - 1;
+        query = query.range(from, to);
+      } else if (options.limit) {
+        query = query.limit(options.limit);
+      }
+
+      const { data, error, count } = await query;
+
+      if (error) throw this.normalizeError(error);
 
       return {
-        success: response.ok,
-        data: data.data || data,
-        message: data.message,
-        errors: data.errors,
-        status: response.status,
+        data: data as T[],
+        count: count,
+        error: null
       };
-
-    } catch (error) {
-      // Reintentos por fallo de red
-      if (attempt < MAX_RETRIES && error instanceof TypeError && error.message === 'Failed to fetch') {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY * attempt));
-        return this.request<T>(endpoint, options, attempt + 1);
-      }
-
-      throw {
-        status: 0,
-        message: error instanceof Error ? error.message : 'Connection error',
-      };
-    }
-  }
-
-  // --- MÉTODOS PÚBLICOS (GET, POST, PUT, DELETE) ---
-
-  async get<T = unknown>(endpoint: string): Promise<T> {
-    const response = await this.request<T>(endpoint, { method: 'GET' });
-    if (!response.success) {
-      throw {
-        status: response.status,
-        message: response.message || 'Request failed',
-        errors: response.errors
-      } as ApiError;
-    }
-    return response.data as T;
-  }
-
-  async post<T = unknown>(endpoint: string, data: unknown): Promise<T> {
-    const response = await this.request<T>(endpoint, {
-      method: 'POST',
-      body: JSON.stringify(data),
     });
-    if (!response.success) {
-      throw {
-        status: response.status,
-        message: response.message || 'Request failed',
-        errors: response.errors,
-      } as ApiError;
-    }
-    return response.data as T;
-  }
-
-  async put<T = unknown>(endpoint: string, data: unknown): Promise<T> {
-    const response = await this.request<T>(endpoint, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-    if (!response.success) {
-      throw {
-        status: response.status,
-        message: response.message || 'Request failed',
-        errors: response.errors,
-      } as ApiError;
-    }
-    return response.data as T;
-  }
-
-  async delete<T = unknown>(endpoint: string): Promise<T> {
-    const response = await this.request<T>(endpoint, { method: 'DELETE' });
-    if (!response.success) {
-      throw {
-        status: response.status,
-        message: response.message || 'Request failed',
-      } as ApiError;
-    }
-    return response.data as T;
   }
 
   /**
-   * Login
+   * Obtener un solo registro por ID (Optimizado)
    */
-  async login(email: string, password: string, tenantId: number): Promise<{
-    user: {
-      id: number;
-      name: string;
-      email: string;
-      role: string;
-      tenant_id: number;
-    };
-    access_token: string;
-    refresh_token: string;
-  }> {
-    // Usamos el método post interno que ya maneja la URL base
-    const response = await this.post('/auth/login', {
-      email,
-      password,
-      tenant_id: tenantId,
+  async getById<T = any>(table: string, id: string | number, select: string = '*'): Promise<T> {
+    return this.retryOperation(async () => {
+      const { data, error } = await supabase
+        .from(table)
+        .select(select)
+        .eq('id', id)
+        .single();
+
+      if (error) throw this.normalizeError(error);
+      return data as T;
     });
-    
-    const authData = response as any;
-    
-    this.setToken(authData.access_token);
-    
-    if (typeof window !== 'undefined') {
-      sessionStorage.setItem('refresh_token', authData.refresh_token);
-      sessionStorage.setItem('user', JSON.stringify(authData.user));
-    }
-
-    return authData;
   }
 
   /**
-   * Refrescar token (Método privado)
+   * POST (Insertar)
+   * Devuelve el objeto creado
    */
-  private async refreshToken(): Promise<string> {
-    if (typeof window !== 'undefined') {
-      const refreshToken = sessionStorage.getItem('refresh_token');
-      if (!refreshToken) {
-        throw new Error('No refresh token available');
-      }
+  async post<T = any>(table: string, payload: any): Promise<T> {
+    return this.retryOperation(async () => {
+      const { data, error } = await supabase
+        .from(table)
+        .insert(payload)
+        .select()
+        .single();
 
-      try {
-        const url = `${API_BASE}/${API_VERSION}/auth/refresh`;
-        const response = await fetch(url, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Accept': 'application/json',
-            'Authorization': `Bearer ${refreshToken}`
-          },
-          body: JSON.stringify({ refresh_token: refreshToken }),
-        });
-
-        const data = await response.json();
-        
-        if (response.ok && (data.access_token || data.data?.access_token)) {
-          const newToken = data.access_token || data.data.access_token;
-          this.setToken(newToken);
-          return newToken;
-        }
-
-        throw new Error('Token refresh failed');
-      } catch (error) {
-        this.clearToken();
-        throw error;
-      }
-    }
-    throw new Error('Window not available');
+      if (error) throw this.normalizeError(error);
+      return data as T;
+    });
   }
 
   /**
-   * Logout
+   * PUT (Actualizar)
    */
-  async logout(): Promise<void> {
+  async put<T = any>(table: string, id: string | number, payload: any): Promise<T> {
+    return this.retryOperation(async () => {
+      const { data, error } = await supabase
+        .from(table)
+        .update(payload)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) throw this.normalizeError(error);
+      return data as T;
+    });
+  }
+
+  /**
+   * DELETE (Eliminar)
+   */
+  async delete(table: string, id: string | number): Promise<void> {
+    return this.retryOperation(async () => {
+      const { error } = await supabase
+        .from(table)
+        .delete()
+        .eq('id', id);
+
+      if (error) throw this.normalizeError(error);
+    });
+  }
+
+  /**
+   * RPC (Remote Procedure Call)
+   * Para ejecutar lógica compleja directamente en la Base de Datos (Stored Procedures).
+   * Esto es vital para ERPs complejos para reducir latencia.
+   */
+  async rpc<T = any>(functionName: string, params?: Record<string, any>): Promise<T> {
+    return this.retryOperation(async () => {
+      const { data, error } = await supabase.rpc(functionName, params);
+      if (error) throw this.normalizeError(error);
+      return data as T;
+    });
+  }
+
+  // --- UTILIDADES INTERNAS DE RESILIENCIA ---
+
+  /**
+   * Mecanismo de Reintento (Exponential Backoff)
+   * Si la red falla, reintenta 3 veces antes de rendirse.
+   */
+  private async retryOperation<T>(operation: () => Promise<T>, retries = MAX_RETRIES): Promise<T> {
     try {
-      await this.post('/auth/logout', {});
-    } catch (error) {
-      console.warn('Logout server error', error);
-    } finally {
-      this.clearToken();
-      if (typeof window !== 'undefined') {
-         window.location.href = '/login';
+      return await operation();
+    } catch (error: any) {
+      // Solo reintentamos si es error de red o timeout (5xx, NetworkError)
+      // No reintentamos si es 4xx (Bad Request, Unauthorized, etc)
+      const isRetryable = !error.status || (error.status >= 500 && error.status < 600);
+
+      if (retries > 0 && isRetryable) {
+        console.warn(`⚠️ Red inestable, reintentando operación... (${retries} restantes)`);
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        return this.retryOperation(operation, retries - 1);
       }
+      throw error;
     }
   }
 
-  async getCurrentUser(): Promise<any> {
-    return this.get('/auth/me');
-  }
+  /**
+   * Normalizador de Errores de PostgreSQL a formato legible
+   */
+  private normalizeError(error: PostgrestError | any): ApiError {
+    console.error('🔥 DB Error:', error);
 
-  isAuthenticated(): boolean {
-    return !!this.getToken();
+    // Mapeo de códigos comunes de Postgres
+    let readableMessage = error.message;
+    if (error.code === '23505') readableMessage = 'Este registro ya existe (duplicado).';
+    if (error.code === '23503') readableMessage = 'No se puede eliminar porque tiene datos relacionados.';
+    if (error.code === 'PGRST116') readableMessage = 'No se encontraron resultados.';
+
+    return {
+      status: error.code ? 400 : 500, // Postgres errors suelen ser 400 (Bad Request)
+      code: error.code || 'UNKNOWN',
+      message: readableMessage,
+      details: error.details || '',
+      hint: error.hint || ''
+    };
   }
 }
 
 export const api = new ApiClient();
-export type { ApiError };

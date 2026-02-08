@@ -1,101 +1,109 @@
 /**
- * Application Constants
- * Security: Uses environment variables exclusively - NO hardcoded values
+ * Application Constants & Configuration
+ * -------------------------------------
+ * Security: Uses environment variables exclusively.
+ * Architecture: Optimized for Supabase + Alpine.js
+ * Performance: Includes constants for caching and timeouts.
  */
 
-// API Configuration
-// These use PUBLIC_API_BASE from .env, NEVER hardcoded URLs
-export const API_ENDPOINTS = {
-  AUTH_LOGIN: '/auth/login',
-  AUTH_VERIFY: '/auth/verify',
-  AUTH_LOGOUT: '/auth/logout',
-  AUTH_REFRESH: '/auth/refresh',
+// 1. SUPABASE TABLES (Mapeo de Rutas Lógicas a Tablas Reales)
+// Usamos estos valores con el cliente api.get('tabla')
+export const DB_TABLES = {
+  TENANTS: 'tenants',
+  USERS: 'profiles', // Supabase suele usar 'profiles' para datos de usuario
+  INVENTORY: 'inventory_items',
+  SALES: 'sales_orders',
+  PURCHASES: 'purchase_orders',
+  HR_EMPLOYEES: 'employees',
+  PROJECTS: 'projects',
+  LOGISTICS: 'shipments',
+  FINANCE: 'transactions',
+  DOCUMENTS: 'documents',
+  AUDIT_LOGS: 'audit_logs',
+} as const;
+
+// 2. APP ROUTES (Rutas del Frontend para redirecciones)
+export const APP_ROUTES = {
+  LOGIN: '/login',
   DASHBOARD: '/dashboard',
-  USERS: '/users',
-  INVENTORY: '/inventory',
-  SALES: '/sales',
-  PURCHASES: '/purchases',
-  HR: '/hr',
-  PROJECTS: '/projects',
-  LOGISTICS: '/logistics',
-  FINANCE: '/finance',
-  DOCUMENTS: '/documents',
+  UNAUTHORIZED: '/403',
+  NOT_FOUND: '/404',
+  SERVER_ERROR: '/500',
 } as const;
 
-// Storage Keys (for localStorage)
+// 3. STORAGE KEYS (Sincronizado con login.astro y alpine-store.ts)
+// IMPORTANTE: Usamos 'access_token' para compatibilidad con Supabase Auth
 export const STORAGE_KEYS = {
-  AUTH_TOKEN: 'auth_token',
+  AUTH_TOKEN: 'access_token',
   REFRESH_TOKEN: 'refresh_token',
-  USER_PREFERENCES: 'user_preferences',
-  LAST_ROUTE: 'last_route',
+  USER_DATA: 'user',
+  CURRENT_TENANT: 'current_tenant',
+  THEME_PREFERENCE: 'theme',
+  SIDEBAR_STATE: 'sidebar_open',
 } as const;
 
-// Timeout Values (milliseconds)
+// 4. TIMEOUTS & PERFORMANCE (Ajustado para alto tráfico)
 export const TIMEOUTS = {
-  API_REQUEST: 30000, // 30 seconds
-  SESSION_TIMEOUT: 3600000, // 1 hour
-  DEBOUNCE_SEARCH: 300, // 300ms
+  API_REQUEST: 15000,      // 15s (Fail fast es mejor en alto tráfico)
+  SESSION_CHECK: 60000,    // Verificar sesión cada 1 min
+  DEBOUNCE_SEARCH: 300,    // 300ms para inputs de búsqueda
+  TOAST_DURATION: 4000,    // 4s para notificaciones
+  LONG_POLLING: 10000,     // 10s para actualizaciones en tiempo real (si no usas sockets)
 } as const;
 
-// HTTP Status Codes for Security Decisions
+// 5. HTTP STATUS CODES (Referencia semántica)
 export const HTTP_STATUS = {
   OK: 200,
   CREATED: 201,
+  NO_CONTENT: 204,
   BAD_REQUEST: 400,
   UNAUTHORIZED: 401,
   FORBIDDEN: 403,
   NOT_FOUND: 404,
+  CONFLICT: 409, // Útil para duplicados
   SERVER_ERROR: 500,
   SERVICE_UNAVAILABLE: 503,
 } as const;
 
-// Error Messages (User-Friendly, No Technical Details)
+// 6. ERROR MESSAGES (User-Friendly & Production Safe)
 export const ERROR_MESSAGES = {
-  NETWORK_ERROR: 'Unable to connect to the server. Please check your connection.',
-  AUTH_FAILED: 'Authentication failed. Please try again.',
-  SESSION_EXPIRED: 'Your session has expired. Please login again.',
-  UNAUTHORIZED: 'You do not have permission to perform this action.',
-  SERVER_ERROR: 'A server error occurred. Please contact support.',
-  VALIDATION_ERROR: 'Please check your input and try again.',
+  NETWORK_ERROR: 'No se pudo conectar con el servidor. Verifica tu conexión a internet.',
+  AUTH_FAILED: 'Credenciales incorrectas o sesión expirada.',
+  SESSION_EXPIRED: 'Tu sesión ha caducado por seguridad. Por favor inicia sesión nuevamente.',
+  UNAUTHORIZED: 'No tienes permisos suficientes para realizar esta acción.',
+  SERVER_ERROR: 'Ocurrió un error interno. El equipo técnico ha sido notificado.',
+  VALIDATION_ERROR: 'Por favor verifica los datos ingresados.',
+  RECORD_EXISTS: 'Este registro ya existe en la base de datos.',
 } as const;
 
-// API Rate Limiting (from server config)
-export const RATE_LIMITS = {
-  MAX_REQUESTS: parseInt(import.meta.env.PUBLIC_RATE_LIMIT_REQUESTS || '60'),
-  TIME_WINDOW_MINUTES: parseInt(import.meta.env.PUBLIC_RATE_LIMIT_MINUTES || '1'),
-} as const;
-
-// Security Configuration
+// 7. SECURITY CONFIGURATION
 export const SECURITY_CONFIG = {
-  // Token expiration (match server config)
-  TOKEN_EXPIRATION_MINUTES: 60,
+  // Supabase maneja la expiración, pero esto sirve para lógica local
+  TOKEN_EXPIRATION_HOURS: 1, 
   
-  // Refresh token expiration
-  REFRESH_TOKEN_EXPIRATION_DAYS: 7,
+  // Encriptación local (si decides implementar cifrado de datos sensibles en cliente)
+  ENCRYPTION_ENABLED: import.meta.env.PROD,
   
-  // Enable HTTPS only in production
+  // Política de contraseñas (Frontend validation)
+  PASSWORD_MIN_LENGTH: 8,
+  
+  // Forzar HTTPS
   HTTPS_ONLY: import.meta.env.PROD,
-  
-  // Secure cookies
-  SECURE_COOKIES: import.meta.env.PROD,
-  
-  // Same-site cookie policy
-  SAME_SITE: 'Strict',
 } as const;
 
 /**
  * Get a value from environment variables safely
- * Never exposes the value in error messages
- * 
  * @param key - Environment variable name
  * @param defaultValue - Default if not set
- * @returns The environment variable value
  */
 export function getEnvVariable(key: string, defaultValue: string = ''): string {
+  // Soporte para Astro/Vite
   const value = import.meta.env[key];
   
   if (!value && !defaultValue) {
-    console.error(`[Security] Missing environment variable: ${key}`);
+    if (import.meta.env.DEV) {
+      console.warn(`[Config] Variable de entorno faltante: ${key}`);
+    }
     return '';
   }
   
@@ -103,11 +111,15 @@ export function getEnvVariable(key: string, defaultValue: string = ''): string {
 }
 
 /**
- * Validate that all required environment variables are set
- * Runs at application startup
+ * VALIDATE ENVIRONMENT (Critical for Production)
+ * Verifica que Supabase esté configurado antes de iniciar la app.
  */
 export function validateEnvironment(): boolean {
-  const requiredVars = ['PUBLIC_API_BASE'];
+  const requiredVars = [
+    'PUBLIC_SUPABASE_URL',
+    'PUBLIC_SUPABASE_ANON_KEY'
+  ];
+  
   const missing: string[] = [];
 
   for (const varName of requiredVars) {
@@ -118,7 +130,7 @@ export function validateEnvironment(): boolean {
 
   if (missing.length > 0) {
     console.error(
-      '[Security] Missing required environment variables:',
+      '🚨 FATAL ERROR: Faltan variables de entorno críticas:',
       missing.join(', ')
     );
     return false;
