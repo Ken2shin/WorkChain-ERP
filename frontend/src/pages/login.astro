@@ -6,7 +6,7 @@ import Layout from '../layouts/Layout.astro';
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
       
-      <div x-data="loginForm" x-cloak class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8 relative overflow-hidden">
+      <div x-data="loginForm" class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8 relative overflow-hidden">
         
         <div class="text-center mb-8 relative z-10">
           <div class="mb-4">
@@ -18,45 +18,42 @@ import Layout from '../layouts/Layout.astro';
           <p class="text-slate-400">Sistema de Gestión Empresarial</p>
         </div>
 
-        <div class="mb-6 relative z-10 min-h-[70px]">
+        <div class="mb-6 relative z-10 min-h-[80px]">
             
-            <div x-show="serverStatus === 'checking'" 
-                 x-transition:enter="transition ease-out duration-300"
-                 class="p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg flex items-center gap-4 shadow-lg shadow-blue-500/10">
-                <div class="relative">
+            <template x-if="serverStatus === 'checking'">
+                <div class="p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg flex items-center gap-4 shadow-lg">
                     <div class="animate-spin h-6 w-6 border-2 border-blue-400 border-t-transparent rounded-full"></div>
-                </div>
-                <div class="text-sm text-blue-300">
-                    <p class="font-bold text-blue-200">Estableciendo conexión...</p>
-                    <p class="text-xs opacity-70">Verificando base de datos</p>
-                </div>
-            </div>
-
-            <div x-show="serverStatus === 'error'" 
-                 x-transition 
-                 class="p-4 bg-red-500/10 border border-red-500/50 rounded-lg shadow-lg shadow-red-500/10">
-                <div class="flex items-center gap-3 mb-3">
-                    <div class="bg-red-500/20 p-1 rounded-full">
-                        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    <div class="text-sm text-blue-300">
+                        <p class="font-bold text-blue-200">Conectando...</p>
+                        <p class="text-xs opacity-70">Verificando base de datos</p>
                     </div>
-                    <span class="text-sm text-red-300 font-bold">Fallo de Conexión</span>
                 </div>
-                <p class="text-xs text-red-400/80 mb-3">No se pudo contactar con el servidor.</p>
-                <button @click="init()" class="w-full py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold rounded transition flex items-center justify-center gap-2">
-                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.058M20.9 14.25A10.05 10.05 0 0112 21.75c-5.523 0-10-4.477-10-10S6.477 1.75 12 1.75c1.6 0 3.1.37 4.45 1.025L20 4.25"></path></svg>
-                    Reintentar ahora
-                </button>
-            </div>
+            </template>
 
-            <div x-show="serverStatus === 'connected'" 
-                 x-transition 
-                 class="p-3 bg-emerald-500/10 border border-emerald-500/40 rounded-lg flex flex-col items-center justify-center gap-1 shadow-lg shadow-emerald-500/10 mb-4">
-                <div class="flex items-center gap-2 text-emerald-400">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <span class="text-sm font-bold">Sistema Online</span>
+            <template x-if="serverStatus === 'error'">
+                <div class="p-4 bg-red-500/10 border border-red-500/50 rounded-lg shadow-lg">
+                    <div class="flex items-center gap-3 mb-2">
+                        <div class="bg-red-500/20 p-1 rounded-full">
+                            <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                        </div>
+                        <span class="text-sm text-red-300 font-bold">Error de Conexión</span>
+                    </div>
+                    <p class="text-xs text-red-400/80 mb-3">No se pudo contactar con el servidor.</p>
+                    <button @click="init()" class="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded transition">
+                        Reintentar
+                    </button>
                 </div>
-                <span class="text-[10px] text-emerald-500/70 uppercase tracking-wider">Conexión Segura</span>
-            </div>
+            </template>
+
+            <template x-if="serverStatus === 'connected'">
+                <div class="p-3 bg-emerald-500/10 border border-emerald-500/40 rounded-lg flex flex-col items-center justify-center gap-1 shadow-lg mb-4">
+                    <div class="flex items-center gap-2 text-emerald-400">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                        <span class="text-sm font-bold">Sistema Online</span>
+                    </div>
+                    <span class="text-[10px] text-emerald-500/70 uppercase tracking-wider">Conexión Segura</span>
+                </div>
+            </template>
         </div>
 
         <form @submit.prevent="submit" class="space-y-4 relative z-10">
@@ -67,7 +64,7 @@ import Layout from '../layouts/Layout.astro';
                 <select
                   x-model="form.tenantId"
                   :disabled="serverStatus !== 'connected'"
-                  class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed appearance-none"
+                  class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition disabled:opacity-50 appearance-none"
                   required
                 >
                   <option value="" disabled>Seleccionar organización...</option>
@@ -105,14 +102,14 @@ import Layout from '../layouts/Layout.astro';
             />
           </div>
 
-          <div x-show="form.error" x-transition class="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-center">
+          <div x-show="form.error" class="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-center">
             <p class="text-sm text-red-400 font-medium" x-text="form.error"></p>
           </div>
 
           <button
             type="submit"
             :disabled="form.submitting || serverStatus !== 'connected'"
-            class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition shadow-lg hover:shadow-blue-500/20 flex justify-center items-center"
+            class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-lg transition shadow-lg flex justify-center items-center"
           >
             <span x-show="!form.submitting">Iniciar Sesión</span>
             <span x-show="form.submitting" class="flex items-center gap-2">
@@ -133,29 +130,30 @@ import Layout from '../layouts/Layout.astro';
   </div>
 </Layout>
 
-<style>
-    [x-cloak] { display: none !important; }
-</style>
-
 <script>
   import { api } from '../lib/api-client';
   import { STORAGE_KEYS, DB_TABLES } from '../lib/constants';
 
-  // --- CORRECCIÓN 1: Declarar la interfaz global de Window ---
-  // Esto le dice a TypeScript que 'Alpine' existe en el objeto window
+  // --- SOLUCIÓN DE ERRORES TYPESCRIPT ---
   declare global {
     interface Window {
       Alpine: any;
     }
   }
 
+  // Esperamos a que Alpine esté disponible
   document.addEventListener('alpine:init', () => {
-    // Usamos window.Alpine para evitar conflictos de nombres
+    
+    // Verificamos que Alpine exista antes de registrar el componente
+    if (!window.Alpine) {
+        console.error("❌ AlpineJS no está cargado. Ejecuta 'npx astro add alpinejs'");
+        return;
+    }
+
     window.Alpine.data('loginForm', () => ({
-      serverStatus: 'checking', 
+      serverStatus: 'checking', // Estados: 'checking', 'connected', 'error'
       
-      // --- CORRECCIÓN 2: Tipar el array explícitamente ---
-      // 'as any[]' evita que TS infiera que el array es de tipo 'never' (vacío para siempre)
+      // Tipado explícito para evitar error 'never[]'
       organizations: [] as any[], 
       
       form: {
@@ -167,7 +165,7 @@ import Layout from '../layouts/Layout.astro';
       },
 
       async init() {
-        console.log('🚀 Iniciando sistema de login...');
+        console.log('🚀 Iniciando componente Login...');
         await this.checkConnection();
       },
 
@@ -175,27 +173,30 @@ import Layout from '../layouts/Layout.astro';
         this.serverStatus = 'checking';
         this.form.error = '';
 
+        // Delay de 1.5s para asegurar que el usuario vea el mensaje de carga
         const minLoadingTime = new Promise(resolve => setTimeout(resolve, 1500));
         
-        const dataFetch = api.get(DB_TABLES.TENANTS, {
-            select: 'id, name',
-            orderBy: { column: 'name', ascending: true }
-        });
-
         try {
+            console.log('📡 Conectando a Supabase...');
+            const dataFetch = api.get(DB_TABLES.TENANTS, {
+                select: 'id, name',
+                orderBy: { column: 'name', ascending: true }
+            });
+
+            // Promise.all fuerza a esperar AMBOS: la carga de datos Y el tiempo mínimo
             const [_, response] = await Promise.all([minLoadingTime, dataFetch]);
             
             if (response.data) {
-                // Al tener 'organizations' tipado como any[], esto ya no da error
                 this.organizations = response.data;
                 this.serverStatus = 'connected';
-                console.log('✅ Conexión exitosa. Tenants cargados:', this.organizations.length);
+                console.log('✅ Conectado. Organizaciones:', this.organizations);
             } else {
-                throw new Error('Sin datos');
+                throw new Error('No data received');
             }
 
         } catch (error) {
             console.error('❌ Error de conexión:', error);
+            // Si falla muy rápido, esperamos a que termine el tiempo mínimo
             await minLoadingTime;
             this.serverStatus = 'error';
         }
@@ -231,7 +232,7 @@ import Layout from '../layouts/Layout.astro';
         } catch (error) {
           console.error('Login error:', error);
           // @ts-ignore
-          this.form.error = 'Credenciales incorrectas o usuario no autorizado.';
+          this.form.error = 'Credenciales incorrectas.';
         } finally {
           this.form.submitting = false;
         }
