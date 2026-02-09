@@ -5,9 +5,10 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Login - WorkChain ERP">
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
-      <div x-data="loginForm" class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8">
+      
+      <div x-data="loginForm" x-cloak class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8 relative overflow-hidden">
         
-        <div class="text-center mb-8">
+        <div class="text-center mb-8 relative z-10">
           <div class="mb-4">
             <svg class="w-16 h-16 mx-auto text-blue-500" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
@@ -17,50 +18,67 @@ import Layout from '../layouts/Layout.astro';
           <p class="text-slate-400">Sistema de Gestión Empresarial</p>
         </div>
 
-        <div class="mb-6">
+        <div class="mb-6 relative z-10 min-h-[70px]">
             
-            <div x-show="serverStatus === 'checking'" class="p-3 bg-blue-500 bg-opacity-10 border border-blue-500 rounded-lg flex items-center gap-3">
-                <svg class="animate-spin h-5 w-5 text-blue-400" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
+            <div x-show="serverStatus === 'checking'" 
+                 x-transition:enter="transition ease-out duration-300"
+                 class="p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg flex items-center gap-4 shadow-lg shadow-blue-500/10">
+                <div class="relative">
+                    <div class="animate-spin h-6 w-6 border-2 border-blue-400 border-t-transparent rounded-full"></div>
+                </div>
                 <div class="text-sm text-blue-300">
-                    <p class="font-bold">Conectando con base de datos...</p>
-                    <p class="text-xs opacity-75">Sincronizando con Supabase...</p>
+                    <p class="font-bold text-blue-200">Estableciendo conexión...</p>
+                    <p class="text-xs opacity-70">Verificando base de datos</p>
                 </div>
             </div>
 
-            <div x-show="serverStatus === 'error'" style="display: none;" class="p-3 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg">
-                <div class="flex items-center gap-3 mb-2">
-                    <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                    <span class="text-sm text-red-400 font-bold">No se pudo conectar</span>
+            <div x-show="serverStatus === 'error'" 
+                 x-transition 
+                 class="p-4 bg-red-500/10 border border-red-500/50 rounded-lg shadow-lg shadow-red-500/10">
+                <div class="flex items-center gap-3 mb-3">
+                    <div class="bg-red-500/20 p-1 rounded-full">
+                        <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </div>
+                    <span class="text-sm text-red-300 font-bold">Fallo de Conexión</span>
                 </div>
-                <p class="text-xs text-red-300 mb-3">El servidor no responde o no hay internet. Verifica tu conexión.</p>
-                <button @click="loadTenants()" class="w-full py-1 px-3 bg-red-600 hover:bg-red-700 text-white text-xs rounded transition">
-                    Reintentar Conexión
+                <p class="text-xs text-red-400/80 mb-3">No se pudo contactar con el servidor.</p>
+                <button @click="init()" class="w-full py-2 bg-red-600 hover:bg-red-700 active:bg-red-800 text-white text-xs font-bold rounded transition flex items-center justify-center gap-2">
+                    <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.058M20.9 14.25A10.05 10.05 0 0112 21.75c-5.523 0-10-4.477-10-10S6.477 1.75 12 1.75c1.6 0 3.1.37 4.45 1.025L20 4.25"></path></svg>
+                    Reintentar ahora
                 </button>
             </div>
 
-             <div x-show="serverStatus === 'connected'" style="display: none;" class="p-2 bg-green-500 bg-opacity-10 border border-green-500 rounded-lg text-center mb-4">
-                <p class="text-xs text-green-400 font-bold">✅ Sistema Online</p>
+            <div x-show="serverStatus === 'connected'" 
+                 x-transition 
+                 class="p-3 bg-emerald-500/10 border border-emerald-500/40 rounded-lg flex flex-col items-center justify-center gap-1 shadow-lg shadow-emerald-500/10 mb-4">
+                <div class="flex items-center gap-2 text-emerald-400">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                    <span class="text-sm font-bold">Sistema Online</span>
+                </div>
+                <span class="text-[10px] text-emerald-500/70 uppercase tracking-wider">Conexión Segura</span>
             </div>
         </div>
 
-        <form @submit.prevent="submit" class="space-y-4">
+        <form @submit.prevent="submit" class="space-y-4 relative z-10">
           
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">Organización</label>
-            <select
-              x-model="form.tenantId"
-              :disabled="serverStatus !== 'connected'"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed"
-              required
-            >
-              <option value="" disabled>Selecciona una organización</option>
-              <template x-for="org in organizations" :key="org.id">
-                <option :value="org.id" x-text="org.name"></option>
-              </template>
-            </select>
+            <div class="relative">
+                <select
+                  x-model="form.tenantId"
+                  :disabled="serverStatus !== 'connected'"
+                  class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition disabled:opacity-50 disabled:cursor-not-allowed appearance-none"
+                  required
+                >
+                  <option value="" disabled>Seleccionar organización...</option>
+                  <template x-for="org in organizations" :key="org.id">
+                    <option :value="org.id" x-text="org.name"></option>
+                  </template>
+                </select>
+                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
+                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
+                </div>
+            </div>
           </div>
 
           <div>
@@ -69,8 +87,8 @@ import Layout from '../layouts/Layout.astro';
               type="email"
               x-model="form.email"
               :disabled="serverStatus !== 'connected'"
-              placeholder="usuario@example.com"
               class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition disabled:opacity-50"
+              placeholder="usuario@empresa.com"
               required
             />
           </div>
@@ -81,39 +99,50 @@ import Layout from '../layouts/Layout.astro';
               type="password"
               x-model="form.password"
               :disabled="serverStatus !== 'connected'"
-              placeholder="••••••••"
               class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition disabled:opacity-50"
+              placeholder="••••••••"
               required
             />
           </div>
 
-          <div x-show="form.error" style="display: none;" class="p-3 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg text-red-400 text-sm">
-            <p x-text="form.error"></p>
+          <div x-show="form.error" x-transition class="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-center">
+            <p class="text-sm text-red-400 font-medium" x-text="form.error"></p>
           </div>
 
           <button
             type="submit"
             :disabled="form.submitting || serverStatus !== 'connected'"
-            class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-medium rounded-lg transition"
+            class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-lg transition shadow-lg hover:shadow-blue-500/20 flex justify-center items-center"
           >
             <span x-show="!form.submitting">Iniciar Sesión</span>
-            <span x-show="form.submitting">Cargando...</span>
+            <span x-show="form.submitting" class="flex items-center gap-2">
+                <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+                Validando...
+            </span>
           </button>
         </form>
 
-        <div class="mt-6 text-center text-sm text-slate-400">
-          <p>Versión 1.0.0 | Enterprise Edition</p>
+        <div class="mt-6 text-center text-xs text-slate-500">
+          <p>WorkChain v1.0.0 | Enterprise Secure Login</p>
         </div>
       </div>
     </div>
   </div>
 </Layout>
 
+<style>
+    [x-cloak] { display: none !important; }
+</style>
+
 <script>
-  // IMPORTACIONES: Usamos la nueva estructura robusta
   import { api } from '../lib/api-client';
   import { STORAGE_KEYS, DB_TABLES } from '../lib/constants';
 
+  // --- CORRECCIÓN 1: Declarar la interfaz global de Window ---
+  // Esto le dice a TypeScript que 'Alpine' existe en el objeto window
   declare global {
     interface Window {
       Alpine: any;
@@ -121,9 +150,13 @@ import Layout from '../layouts/Layout.astro';
   }
 
   document.addEventListener('alpine:init', () => {
+    // Usamos window.Alpine para evitar conflictos de nombres
     window.Alpine.data('loginForm', () => ({
-      // Estados posibles: 'checking' | 'connected' | 'error'
       serverStatus: 'checking', 
+      
+      // --- CORRECCIÓN 2: Tipar el array explícitamente ---
+      // 'as any[]' evita que TS infiera que el array es de tipo 'never' (vacío para siempre)
+      organizations: [] as any[], 
       
       form: {
         email: '',
@@ -132,52 +165,50 @@ import Layout from '../layouts/Layout.astro';
         submitting: false,
         error: '',
       },
-      organizations: [] as { id: string; name: string }[],
 
       async init() {
-        // Al iniciar, mostramos "Conectando..." y cargamos datos
-        this.serverStatus = 'checking';
-        console.log('🚀 Iniciando Login (Modo Supabase Direct)...');
-        await this.loadTenants();
+        console.log('🚀 Iniciando sistema de login...');
+        await this.checkConnection();
       },
 
-      async loadTenants() {
-        this.serverStatus = 'checking'; 
+      async checkConnection() {
+        this.serverStatus = 'checking';
+        this.form.error = '';
+
+        const minLoadingTime = new Promise(resolve => setTimeout(resolve, 1500));
         
-        try {
-          // api.get usa el sistema de reintentos automático
-          // Si falla 3 veces, lanzará error y caeremos en el catch
-          const result = await api.get(DB_TABLES.TENANTS, {
+        const dataFetch = api.get(DB_TABLES.TENANTS, {
             select: 'id, name',
             orderBy: { column: 'name', ascending: true }
-          });
+        });
 
-          // Si llega aquí, es que hay conexión exitosa
-          this.organizations = result.data || [];
-          
-          // Pequeño delay visual para que no sea un parpadeo instantáneo
-          setTimeout(() => {
-              this.serverStatus = 'connected';
-          }, 300);
+        try {
+            const [_, response] = await Promise.all([minLoadingTime, dataFetch]);
+            
+            if (response.data) {
+                // Al tener 'organizations' tipado como any[], esto ya no da error
+                this.organizations = response.data;
+                this.serverStatus = 'connected';
+                console.log('✅ Conexión exitosa. Tenants cargados:', this.organizations.length);
+            } else {
+                throw new Error('Sin datos');
+            }
 
-        } catch (error: any) {
-          console.error('❌ Error Crítico de Conexión:', error);
-          this.serverStatus = 'error'; // Esto activa la caja roja en el HTML
+        } catch (error) {
+            console.error('❌ Error de conexión:', error);
+            await minLoadingTime;
+            this.serverStatus = 'error';
         }
       },
 
       async submit() {
-        this.form.error = '';
         this.form.submitting = true;
+        this.form.error = '';
 
         try {
-          // Login usando el cliente unificado
           const data = await api.login(this.form.email, this.form.password);
 
           if (data.session) {
-            console.log('✅ Login exitoso:', data.user);
-            
-            // Objeto de usuario seguro
             const userData = {
                 id: data.user.id,
                 email: data.user.email,
@@ -186,26 +217,21 @@ import Layout from '../layouts/Layout.astro';
                 last_login: new Date().toISOString()
             };
 
-            // Guardar sesión usando las constantes para evitar errores
             sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.session.access_token);
             sessionStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.session.refresh_token);
             sessionStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
             sessionStorage.setItem(STORAGE_KEYS.CURRENT_TENANT, this.form.tenantId);
             
-            // Sincronizar con Alpine Store global (si existe)
-            // @ts-ignore
             if(window.Alpine.store('app')) {
-                // @ts-ignore
                 window.Alpine.store('app').setUser(userData);
             }
             
-            // Redirigir al dashboard
             window.location.href = '/dashboard';
           }
-        } catch (error: any) {
+        } catch (error) {
           console.error('Login error:', error);
-          // Mostrar mensaje de error amigable al usuario
-          this.form.error = error.message || 'Credenciales incorrectas o error de servidor.';
+          // @ts-ignore
+          this.form.error = 'Credenciales incorrectas o usuario no autorizado.';
         } finally {
           this.form.submitting = false;
         }
