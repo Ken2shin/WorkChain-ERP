@@ -5,10 +5,8 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Login - WorkChain ERP">
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
-      
-      <div x-data="loginForm" class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8 relative overflow-hidden">
-        
-        <div class="text-center mb-8 relative z-10">
+      <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8">
+        <div class="text-center mb-8">
           <div class="mb-4">
             <svg class="w-16 h-16 mx-auto text-blue-500" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
@@ -18,64 +16,23 @@ import Layout from '../layouts/Layout.astro';
           <p class="text-slate-400">Sistema de Gestión Empresarial</p>
         </div>
 
-        <div class="mb-6 relative z-10 min-h-[80px]">
-            
-            <template x-if="serverStatus === 'checking'">
-                <div class="p-4 bg-blue-500/10 border border-blue-500/50 rounded-lg flex items-center gap-4 shadow-lg">
-                    <div class="animate-spin h-6 w-6 border-2 border-blue-400 border-t-transparent rounded-full"></div>
-                    <div class="text-sm text-blue-300">
-                        <p class="font-bold text-blue-200">Conectando...</p>
-                        <p class="text-xs opacity-70">Verificando base de datos</p>
-                    </div>
-                </div>
-            </template>
-
-            <template x-if="serverStatus === 'error'">
-                <div class="p-4 bg-red-500/10 border border-red-500/50 rounded-lg shadow-lg">
-                    <div class="flex items-center gap-3 mb-2">
-                        <div class="bg-red-500/20 p-1 rounded-full">
-                            <svg class="w-5 h-5 text-red-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
-                        </div>
-                        <span class="text-sm text-red-300 font-bold">Error de Conexión</span>
-                    </div>
-                    <p class="text-xs text-red-400/80 mb-3">No se pudo contactar con el servidor.</p>
-                    <button @click="init()" class="w-full py-2 bg-red-600 hover:bg-red-700 text-white text-xs font-bold rounded transition">
-                        Reintentar
-                    </button>
-                </div>
-            </template>
-
-            <template x-if="serverStatus === 'connected'">
-                <div class="p-3 bg-emerald-500/10 border border-emerald-500/40 rounded-lg flex flex-col items-center justify-center gap-1 shadow-lg mb-4">
-                    <div class="flex items-center gap-2 text-emerald-400">
-                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-                        <span class="text-sm font-bold">Sistema Online</span>
-                    </div>
-                    <span class="text-[10px] text-emerald-500/70 uppercase tracking-wider">Conexión Segura</span>
-                </div>
-            </template>
-        </div>
-
-        <form @submit.prevent="submit" class="space-y-4 relative z-10">
+        <form x-data="loginForm()" @submit.prevent="submit()" class="space-y-4">
           
           <div>
             <label class="block text-sm font-medium text-slate-300 mb-2">Organización</label>
-            <div class="relative">
-                <select
-                  x-model="form.tenantId"
-                  :disabled="serverStatus !== 'connected'"
-                  class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition disabled:opacity-50 appearance-none"
-                  required
-                >
-                  <option value="" disabled>Seleccionar organización...</option>
-                  <template x-for="org in organizations" :key="org.id">
-                    <option :value="org.id" x-text="org.name"></option>
-                  </template>
-                </select>
-                <div class="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2 text-slate-400">
-                    <svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path></svg>
-                </div>
-            </div>
+            <select
+              x-model="form.tenantId"
+              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition"
+              required
+            >
+              <option value="" disabled>Selecciona una organización</option>
+              <template x-for="org in organizations" :key="org.id">
+                <option :value="org.id" x-text="org.name"></option>
+              </template>
+            </select>
+            <template x-if="organizationsError">
+              <p class="mt-1 text-sm text-red-400" x-text="organizationsError"></p>
+            </template>
           </div>
 
           <div>
@@ -83,9 +40,8 @@ import Layout from '../layouts/Layout.astro';
             <input
               type="email"
               x-model="form.email"
-              :disabled="serverStatus !== 'connected'"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition disabled:opacity-50"
-              placeholder="usuario@empresa.com"
+              placeholder="usuario@example.com"
+              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
               required
             />
           </div>
@@ -95,35 +51,46 @@ import Layout from '../layouts/Layout.astro';
             <input
               type="password"
               x-model="form.password"
-              :disabled="serverStatus !== 'connected'"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition disabled:opacity-50"
               placeholder="••••••••"
+              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
               required
             />
           </div>
 
-          <div x-show="form.error" class="p-3 bg-red-500/10 border border-red-500/50 rounded-lg text-center">
-            <p class="text-sm text-red-400 font-medium" x-text="form.error"></p>
+          <div class="flex items-center">
+            <input
+              type="checkbox"
+              id="remember"
+              x-model="form.remember"
+              class="w-4 h-4 bg-slate-700 border-slate-600 rounded focus:ring-blue-500"
+            />
+            <label for="remember" class="ml-2 text-sm text-slate-400">Recuérdame</label>
           </div>
+
+          <template x-if="form.error">
+            <div class="p-3 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg text-red-400 text-sm">
+              <p x-text="form.error"></p>
+            </div>
+          </template>
 
           <button
             type="submit"
-            :disabled="form.submitting || serverStatus !== 'connected'"
-            class="w-full px-4 py-3 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-bold rounded-lg transition shadow-lg flex justify-center items-center"
+            :disabled="form.submitting"
+            class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition flex justify-center items-center"
           >
             <span x-show="!form.submitting">Iniciar Sesión</span>
             <span x-show="form.submitting" class="flex items-center gap-2">
-                <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
-                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                </svg>
-                Validando...
+              <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+              Cargando...
             </span>
           </button>
         </form>
 
-        <div class="mt-6 text-center text-xs text-slate-500">
-          <p>WorkChain v1.0.0 | Enterprise Secure Login</p>
+        <div class="mt-6 text-center text-sm text-slate-400">
+          <p>Versión 1.0.0 | Kaze-Quantum Secure</p>
         </div>
       </div>
     </div>
@@ -131,112 +98,132 @@ import Layout from '../layouts/Layout.astro';
 </Layout>
 
 <script>
-  import { api } from '../lib/api-client';
-  import { STORAGE_KEYS, DB_TABLES } from '../lib/constants';
+  // Importaciones corregidas
+  // Asumimos que supabase.ts exporta supabase client
+  import { supabase } from '../lib/supabase';
+  import { fetchApi } from '../lib/alpine-store';
 
-  // --- SOLUCIÓN DE ERRORES TYPESCRIPT ---
+  // CORRECCIÓN 1: Definir tipos globales para Alpine
   declare global {
     interface Window {
       Alpine: any;
+      loginForm?: () => LoginFormState;
     }
   }
 
-  // Esperamos a que Alpine esté disponible
-  document.addEventListener('alpine:init', () => {
-    
-    // Verificamos que Alpine exista antes de registrar el componente
-    if (!window.Alpine) {
-        console.error("❌ AlpineJS no está cargado. Ejecuta 'npx astro add alpinejs'");
-        return;
-    }
+  // CORRECCIÓN 2: Interfaz completa incluyendo 'init'
+  interface LoginFormState {
+    form: {
+      email: string;
+      password: string;
+      remember: boolean;
+      tenantId: string;
+      submitting: boolean;
+      error: string;
+    };
+    organizations: Array<{ id: string; name: string }>;
+    organizationsError: string;
+    connectionStatus: 'loading' | 'connected' | 'error';
+    submit: () => Promise<void>;
+    loadTenants: () => Promise<void>;
+    init: () => Promise<void>; // Agregado para satisfacer la llamada automática de Alpine
+  }
 
-    window.Alpine.data('loginForm', () => ({
-      serverStatus: 'checking', // Estados: 'checking', 'connected', 'error'
-      
-      // Tipado explícito para evitar error 'never[]'
-      organizations: [] as any[], 
-      
+  window.loginForm = function loginForm(): LoginFormState {
+    return {
       form: {
         email: '',
         password: '',
+        remember: false,
         tenantId: '',
         submitting: false,
         error: '',
       },
+      // CORRECCIÓN 3: Tipado explícito de array vacío para evitar error 'never[]'
+      organizations: [] as { id: string; name: string }[],
+      organizationsError: '',
+      connectionStatus: 'loading',
 
-      async init() {
-        console.log('🚀 Iniciando componente Login...');
-        await this.checkConnection();
-      },
-
-      async checkConnection() {
-        this.serverStatus = 'checking';
-        this.form.error = '';
-
-        // Delay de 1.5s para asegurar que el usuario vea el mensaje de carga
-        const minLoadingTime = new Promise(resolve => setTimeout(resolve, 1500));
-        
+      async loadTenants() {
         try {
-            console.log('📡 Conectando a Supabase...');
-            const dataFetch = api.get(DB_TABLES.TENANTS, {
-                select: 'id, name',
-                orderBy: { column: 'name', ascending: true }
-            });
+          this.connectionStatus = 'loading';
+          this.organizationsError = '';
 
-            // Promise.all fuerza a esperar AMBOS: la carga de datos Y el tiempo mínimo
-            const [_, response] = await Promise.all([minLoadingTime, dataFetch]);
-            
-            if (response.data) {
-                this.organizations = response.data;
-                this.serverStatus = 'connected';
-                console.log('✅ Conectado. Organizaciones:', this.organizations);
-            } else {
-                throw new Error('No data received');
-            }
+          // Consulta directa a Supabase (PostgreSQL)
+          const { data, error } = await supabase
+            .from('tenants')
+            .select('id, name')
+            .order('name');
 
-        } catch (error) {
-            console.error('❌ Error de conexión:', error);
-            // Si falla muy rápido, esperamos a que termine el tiempo mínimo
-            await minLoadingTime;
-            this.serverStatus = 'error';
+          if (error) throw error;
+
+          if (!data || data.length === 0) {
+            this.organizationsError = 'No hay organizaciones disponibles.';
+            this.connectionStatus = 'error';
+            return;
+          }
+
+          this.organizations = data;
+          this.connectionStatus = 'connected';
+        } catch (error: any) {
+          this.connectionStatus = 'error';
+          this.organizationsError = error.message || 'Error cargando organizaciones';
+          console.error('[Login] Error tenants:', error);
         }
       },
 
       async submit() {
-        this.form.submitting = true;
         this.form.error = '';
+        this.form.submitting = true;
 
         try {
-          const data = await api.login(this.form.email, this.form.password);
-
-          if (data.session) {
-            const userData = {
-                id: data.user.id,
-                email: data.user.email,
-                tenant_id: this.form.tenantId,
-                role: 'user', 
-                last_login: new Date().toISOString()
-            };
-
-            sessionStorage.setItem(STORAGE_KEYS.AUTH_TOKEN, data.session.access_token);
-            sessionStorage.setItem(STORAGE_KEYS.REFRESH_TOKEN, data.session.refresh_token);
-            sessionStorage.setItem(STORAGE_KEYS.USER_DATA, JSON.stringify(userData));
-            sessionStorage.setItem(STORAGE_KEYS.CURRENT_TENANT, this.form.tenantId);
-            
-            if(window.Alpine.store('app')) {
-                window.Alpine.store('app').setUser(userData);
-            }
-            
-            window.location.href = '/dashboard';
+          if (!this.form.email || !this.form.password || !this.form.tenantId) {
+            this.form.error = 'Completa todos los campos.';
+            return;
           }
-        } catch (error) {
-          console.error('Login error:', error);
-          // @ts-ignore
-          this.form.error = 'Credenciales incorrectas.';
+
+          // Uso de fetchApi SEGURO (envía credentials: 'include' automáticamente)
+          // El backend debe establecer la cookie HttpOnly en la respuesta.
+          const response = await fetchApi('/auth/login', {
+            method: 'POST',
+            body: JSON.stringify({
+              email: this.form.email,
+              password: this.form.password,
+              tenant_id: this.form.tenantId,
+              remember: this.form.remember
+            })
+          });
+
+          if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.message || 'Credenciales inválidas');
+          }
+
+          // ÉXITO: No guardamos nada en localStorage.
+          // Actualizamos el estado global en RAM y redirigimos.
+          if (window.Alpine) {
+            // Forzamos al store a verificar la sesión (leyendo la nueva cookie)
+            await window.Alpine.store('app').checkSession();
+          }
+
+          window.location.href = '/dashboard';
+
+        } catch (error: any) {
+          this.form.error = error.message || 'Error de conexión';
         } finally {
           this.form.submitting = false;
         }
+      },
+
+      async init() {
+        await this.loadTenants();
       }
-    }));
-  });
+    };
+  };
 </script>
+
+<style>
+  :global(body) {
+    @apply overflow-hidden;
+  }
+</style>
