@@ -5,10 +5,10 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Login - WorkChain ERP">
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
-      <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-2xl p-8">
+      <div x-cloak class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8 transform transition-all">
         <div class="text-center mb-8">
           <div class="mb-4">
-            <svg class="w-16 h-16 mx-auto text-blue-500" fill="currentColor" viewBox="0 0 24 24">
+            <svg class="w-16 h-16 mx-auto text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
           </div>
@@ -16,59 +16,59 @@ import Layout from '../layouts/Layout.astro';
           <p class="text-slate-400" x-data x-text="$store.app.currentTenantName ? 'Acceso Corporativo' : 'Sistema de Gestión Empresarial'"></p>
         </div>
 
-        <form x-data="loginForm()" @submit.prevent="submit()" class="space-y-4">
+        <form x-data="loginForm()" @submit.prevent="submit()" class="space-y-5">
           
-          <div x-show="!isSubdomain">
-            <label class="block text-sm font-medium text-slate-300 mb-2">Organización</label>
+          <div x-show="!isSubdomain" x-transition>
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Organización</label>
             <select
               x-model="form.tenantId"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white focus:outline-none focus:border-blue-500 transition"
+              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all cursor-pointer"
               :required="!isSubdomain"
             >
-              <option value="" disabled>Selecciona una organización</option>
+              <option value="" disabled selected>Selecciona tu empresa</option>
               <template x-for="org in organizations" :key="org.id">
-                <option :value="org.id" x-text="org.name"></option>
+                <option :value="org.id" x-text="org.name" class="bg-slate-800"></option>
               </template>
             </select>
           </div>
 
-          <div x-show="isSubdomain" class="p-3 bg-blue-500 bg-opacity-10 border border-blue-500/30 rounded-lg flex items-center gap-3">
-             <div class="w-2 h-2 rounded-full bg-blue-500 animate-pulse"></div>
-             <span class="text-sm text-blue-300">Organización: <b x-text="detectedTenantName"></b></span>
+          <div x-show="isSubdomain" x-transition class="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center gap-3">
+             <div class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></div>
+             <span class="text-sm text-blue-400 font-medium">Organización: <b class="text-blue-300" x-text="detectedTenantName"></b></span>
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Correo Electrónico</label>
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Correo Electrónico</label>
             <input
               type="email"
               x-model="form.email"
               placeholder="usuario@dominio.com"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               required
             />
           </div>
 
           <div>
-            <label class="block text-sm font-medium text-slate-300 mb-2">Contraseña</label>
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Contraseña</label>
             <input
               type="password"
               x-model="form.password"
               placeholder="••••••••"
-              class="w-full px-4 py-2 bg-slate-700 border border-slate-600 rounded-lg text-white placeholder-slate-500 focus:outline-none focus:border-blue-500 transition"
+              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
               required
             />
           </div>
 
-          <div class="flex items-center justify-between">
-            <div class="flex items-center">
-              <input type="checkbox" id="remember" x-model="form.remember" class="w-4 h-4 bg-slate-700 border-slate-600 rounded text-blue-600" />
-              <label for="remember" class="ml-2 text-sm text-slate-400">Recuérdame</label>
-            </div>
-            <a href="#" class="text-sm text-blue-400 hover:underline">¿Olvidó su clave?</a>
+          <div class="flex items-center justify-between py-1">
+            <label class="flex items-center cursor-pointer group">
+              <input type="checkbox" id="remember" x-model="form.remember" class="w-4 h-4 bg-slate-900 border-slate-700 rounded text-blue-600 focus:ring-blue-500" />
+              <span class="ml-2 text-sm text-slate-400 group-hover:text-slate-300 transition-colors">Recuérdame</span>
+            </label>
+            <a href="#" class="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">¿Olvidó su clave?</a>
           </div>
 
           <template x-if="form.error">
-            <div class="p-3 bg-red-500 bg-opacity-10 border border-red-500 rounded-lg text-red-400 text-sm animate-shake">
+            <div class="p-3 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 text-sm animate-shake flex items-center gap-2">
               <p x-text="form.error"></p>
             </div>
           </template>
@@ -76,21 +76,23 @@ import Layout from '../layouts/Layout.astro';
           <button
             type="submit"
             :disabled="form.submitting || connectionStatus === 'loading'"
-            class="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 text-white font-medium rounded-lg transition flex justify-center items-center shadow-lg shadow-blue-500/20"
+            class="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 text-white font-bold rounded-xl transition-all flex justify-center items-center shadow-lg shadow-blue-600/30 min-h-[52px]"
           >
             <span x-show="!form.submitting">Entrar al Sistema</span>
-            <span x-show="form.submitting" class="flex items-center gap-2">
-              <svg class="animate-spin h-5 w-5" viewBox="0 0 24 24">
+            <span x-show="form.submitting" class="flex items-center gap-3">
+              <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
                 <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
                 <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
               </svg>
-              Autenticando...
+              Verificando...
             </span>
           </button>
         </form>
 
-        <div class="mt-6 text-center text-xs text-slate-500 uppercase tracking-widest">
-          <p>© 2026 WorkChain ERP | Seguridad Industrial</p>
+        <div class="mt-8 pt-6 border-t border-slate-700/50 text-center">
+          <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+            © 2026 WORKCHAIN ERP | SEGURIDAD INDUSTRIAL
+          </p>
         </div>
       </div>
     </div>
@@ -102,7 +104,9 @@ import Layout from '../layouts/Layout.astro';
   import { fetchApi } from '../lib/alpine-store';
   import type { TenantPublicInfo } from '../lib/supabase';
 
-  // Solución Error ts(2339): Declarar loginForm en el objeto Window
+  // --- CORRECCIÓN DE ERRORES TYPESCRIPT ---
+
+  // Declarar loginForm en Window para solucionar ts(2339)
   declare global {
     interface Window {
       loginForm: () => any;
@@ -120,7 +124,7 @@ import Layout from '../layouts/Layout.astro';
         submitting: false,
         error: '',
       },
-      // Solución Error ts(2322): Inicializar con el tipo correcto para evitar never[]
+      // Solución ts(2322): Definir explícitamente el tipo de array
       organizations: [] as TenantPublicInfo[],
       detectedTenantName: '',
       isSubdomain: false,
@@ -130,16 +134,19 @@ import Layout from '../layouts/Layout.astro';
         const hostname = window.location.hostname;
         
         if (hostname !== 'workchain-erp.onrender.com' && hostname !== 'localhost') {
-           const tenant = await getTenantByDomain(hostname);
-           if (tenant) {
-             this.form.tenantId = tenant.id;
-             this.detectedTenantName = tenant.name;
-             this.isSubdomain = true;
-             this.connectionStatus = 'connected';
-             return;
+           try {
+              const tenant = await getTenantByDomain(hostname);
+              if (tenant) {
+                this.form.tenantId = tenant.id;
+                this.detectedTenantName = tenant.name;
+                this.isSubdomain = true;
+                this.connectionStatus = 'connected';
+                return;
+              }
+           } catch (e) {
+              console.error("Error detectando tenant", e);
            }
         }
-        
         await this.loadTenants();
       },
 
@@ -147,19 +154,18 @@ import Layout from '../layouts/Layout.astro';
         try {
           this.connectionStatus = 'loading';
           const { getTenants } = await import('../lib/supabase');
-          this.organizations = await getTenants();
+          this.organizations = (await getTenants()) as TenantPublicInfo[];
           this.connectionStatus = 'connected';
         } catch (e) {
-          // Solución Error ts(18046): Manejar error de tipo unknown
-          const error = e as Error;
-          this.form.error = error.message || "Error al conectar con el servidor.";
+          // Solución ts(18046): Castear el error para acceder a .message
+          const error = e instanceof Error ? e.message : "Error al conectar.";
+          this.form.error = error;
           this.connectionStatus = 'error';
         }
       },
 
       async submit() {
         if (this.form.submitting) return;
-        
         this.form.error = '';
         this.form.submitting = true;
 
@@ -176,7 +182,7 @@ import Layout from '../layouts/Layout.astro';
 
           if (!response.ok) {
             const data = await response.json().catch(() => ({}));
-            throw new Error(data.message || 'Error de autenticación');
+            throw new Error(data.message || 'Credenciales inválidas');
           }
 
           if (window.Alpine) {
@@ -186,9 +192,8 @@ import Layout from '../layouts/Layout.astro';
           window.location.href = '/dashboard';
 
         } catch (e) {
-          // Solución Error ts(18046): Manejar error de tipo unknown
-          const error = e as Error;
-          this.form.error = error.message;
+          // Solución ts(18046)
+          this.form.error = e instanceof Error ? e.message : 'Error de conexión';
         } finally {
           this.form.submitting = false;
         }
@@ -198,6 +203,9 @@ import Layout from '../layouts/Layout.astro';
 </script>
 
 <style>
+  /* [x-cloak] oculta los elementos hasta que Alpine.js esté listo */
+  [x-cloak] { display: none !important; }
+
   .animate-shake {
     animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
   }
