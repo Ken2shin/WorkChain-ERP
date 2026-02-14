@@ -34,15 +34,16 @@ WORKDIR /var/www
 # =========================
 # COPIAR CÓDIGO LARAVEL
 # =========================
-# Asegúrate que aquí se copie la carpeta que contiene artisan
-COPY ./laravel ./
+# Copiamos la carpeta completa
+COPY ./laravel/ /var/www/
 
-# (Opcional) comprobar que artisan existe en contexto de build (puedes comentar/remove luego)
-# RUN if [ ! -f artisan ]; then echo "ERROR: artisan no encontrado en /var/www"; ls -la /var/www; exit 1; fi
+# Aseguramos que artisan sea ejecutable (por si acaso)
+RUN chmod +x /var/www/artisan
 
 # =========================
 # DEPENDENCIAS PHP (FIX: NO SCRIPTS)
 # =========================
+# --no-scripts evita que falle si faltan variables de entorno en el build
 RUN composer install \
     --no-interaction \
     --no-dev \
@@ -59,16 +60,22 @@ RUN mkdir -p \
     storage/logs \
     bootstrap/cache
 
-RUN chown -R www-data:www-data storage bootstrap/cache
-RUN chmod -R 775 storage bootstrap/cache
+# Asignamos permisos a las carpetas de almacenamiento y al artisan
+RUN chown -R www-data:www-data storage bootstrap/cache /var/www/artisan
+RUN chmod -R 775 storage bootstrap/cache /var/www/artisan
 
 # =========================
-# NGINX + SUPERVISOR (copiar config desde la ruta correcta)
+# NGINX + SUPERVISOR
 # =========================
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
 
+# Exponemos el puerto 80 por convención
 EXPOSE 80
 
-# PROCESO ÚNICO para Render / producción
-CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
+# =========================
+# ARRANQUE (FIX PARA RENDER)
+# =========================
+# Usamos 'sh -c' para poder leer la variable de entorno $PORT.
+# Si Render asigna puerto 10000, Laravel usará 10000.
+CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]

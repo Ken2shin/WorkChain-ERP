@@ -62,9 +62,10 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 # ---------- Laravel ----------
 WORKDIR /var/www
+# Copiamos la carpeta laravel completa
 COPY ./laravel/ /var/www/
 
-# Verificación crítica: artisan debe existir
+# Verificación crítica: artisan debe existir y tener permisos
 RUN if [ ! -f /var/www/artisan ]; then \
         echo "ERROR: artisan no encontrado en /var/www"; \
         ls -la /var/www; \
@@ -74,6 +75,7 @@ RUN if [ ! -f /var/www/artisan ]; then \
 RUN chmod +x /var/www/artisan
 
 # ---------- Dependencias ----------
+# --no-scripts es vital para que no falle el build
 RUN composer install \
     --no-interaction \
     --no-dev \
@@ -94,12 +96,14 @@ RUN mkdir -p \
  && chown -R www-data:www-data storage bootstrap/cache /var/www/artisan \
  && chmod -R 775 storage bootstrap/cache /var/www/artisan
 
-# ---------- Configuración ----------
+# ---------- Configuración Nginx/Supervisor (opcional si usas artisan serve) ----------
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
 
-EXPOSE 8000
+# Render asigna puerto dinámico, pero exponemos 80 por convención
+EXPOSE 80
 
 # ---------- Arranque ----------
+# 🔥 CORRECCIÓN FINAL: Usamos sh -c para leer la variable $PORT de Render
+# Si Render asigna 10000, usará 10000. Si no, usa 80.
 CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]
-

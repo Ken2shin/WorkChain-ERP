@@ -21,11 +21,15 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
+# Copiamos los archivos construidos
 COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/package.json ./package.json
 
-EXPOSE 3002
+# Exponemos 80 por convención
+EXPOSE 80
 
-# 🚫 SIN localhost
-CMD ["npm", "run", "preview", "--", "--host", "0.0.0.0", "--port", "3002"]
+# 🔥 CORRECCIÓN FINAL:
+# Usamos sh -c para inyectar la variable $PORT en el comando de Astro
+# Esto soluciona el error "Port scan timeout"
+CMD ["sh", "-c", "npm run preview -- --host 0.0.0.0 --port ${PORT:-80}"]
