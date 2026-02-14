@@ -4,91 +4,67 @@ import Layout from '../layouts/Layout.astro';
 <Layout title="Login - WorkChain ERP">
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
-      <div x-cloak class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8 transform transition-all">
+      <div x-data="loginForm()" x-cloak class="bg-slate-800 border border-slate-700 rounded-2xl shadow-2xl p-8">
         <div class="text-center mb-8">
           <div class="mb-4">
             <svg class="w-16 h-16 mx-auto text-blue-500 drop-shadow-[0_0_15px_rgba(59,130,246,0.5)]" fill="currentColor" viewBox="0 0 24 24">
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
           </div>
-          <h1 class="text-3xl font-bold text-white mb-2" x-data x-text="$store.app.currentTenantName || 'WorkChain ERP'">WorkChain ERP</h1>
-          <p class="text-slate-400" x-data x-text="$store.app.currentTenantName ? 'Acceso Corporativo' : 'Sistema de Gestión Empresarial'"></p>
+          <h1 class="text-3xl font-bold text-white mb-2"
+              x-text="$store.app?.currentTenantName || 'WorkChain ERP'"></h1>
+          <p class="text-slate-400"
+             x-text="$store.app?.currentTenantName ? 'Acceso Corporativo' : 'Sistema de Gestión Empresarial'"></p>
         </div>
 
-        <form x-data="loginForm()" @submit.prevent="submit()" class="space-y-5">
-          <div x-show="!isSubdomain" x-transition>
+        <form @submit.prevent="submit()" class="space-y-5">
+          <div x-show="!isSubdomain">
             <label class="block text-sm font-semibold text-slate-300 mb-2">Organización</label>
             <select
               x-model="form.tenantId"
-              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all cursor-pointer"
-              :required="!isSubdomain"
-            >
-              <option value="" disabled selected>Selecciona tu empresa</option>
+              required
+              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white">
+              <option value="" disabled>Selecciona tu empresa</option>
               <template x-for="org in organizations" :key="org.id">
-                <option :value="org.id" x-text="org.name" class="bg-slate-800"></option>
+                <option :value="org.id" x-text="org.name"></option>
               </template>
             </select>
           </div>
 
-          <div x-show="isSubdomain" x-transition class="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl flex items-center gap-3">
-             <div class="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></div>
-             <span class="text-sm text-blue-400 font-medium">Organización: <b class="text-blue-300" x-text="detectedTenantName"></b></span>
+          <div x-show="isSubdomain" class="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
+            <span class="text-sm text-blue-400">
+              Organización: <b x-text="detectedTenantName"></b>
+            </span>
           </div>
 
           <div>
-            <label class="block text-sm font-semibold text-slate-300 mb-2">Correo Electrónico</label>
-            <input
-              type="email"
-              x-model="form.email"
-              placeholder="usuario@dominio.com"
-              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              required
-            />
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Correo</label>
+            <input type="email" x-model="form.email" required
+              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white">
           </div>
 
           <div>
             <label class="block text-sm font-semibold text-slate-300 mb-2">Contraseña</label>
-            <input
-              type="password"
-              x-model="form.password"
-              placeholder="••••••••"
-              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white placeholder-slate-600 focus:ring-2 focus:ring-blue-500 outline-none transition-all"
-              required
-            />
-          </div>
-
-          <div class="flex items-center justify-between py-1">
-            <label class="flex items-center cursor-pointer group">
-              <input type="checkbox" id="remember" x-model="form.remember" class="w-4 h-4 bg-slate-900 border-slate-700 rounded text-blue-600 focus:ring-blue-500" />
-              <span class="ml-2 text-sm text-slate-400 group-hover:text-slate-300 transition-colors">Recuérdame</span>
-            </label>
-            <a href="#" class="text-sm font-medium text-blue-400 hover:text-blue-300 transition-colors">¿Olvidó su clave?</a>
+            <input type="password" x-model="form.password" required
+              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white">
           </div>
 
           <template x-if="form.error">
-            <div class="p-3 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 text-sm animate-shake flex items-center gap-2">
-              <p x-text="form.error"></p>
+            <div class="p-3 bg-red-500/10 border border-red-500/50 rounded-xl text-red-400 text-sm">
+              <span x-text="form.error"></span>
             </div>
           </template>
 
-          <button
-            type="submit"
-            :disabled="form.submitting || connectionStatus === 'loading'"
-            class="w-full py-3.5 px-4 bg-blue-600 hover:bg-blue-500 active:scale-[0.98] disabled:opacity-50 text-white font-bold rounded-xl transition-all flex justify-center items-center shadow-lg shadow-blue-600/30 min-h-[52px]"
-          >
+          <button type="submit"
+            class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl"
+            :disabled="form.submitting">
             <span x-show="!form.submitting">Entrar al Sistema</span>
-            <span x-show="form.submitting" class="flex items-center gap-3">
-              <svg class="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
-                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4" fill="none"></circle>
-                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-              Verificando...
-            </span>
+            <span x-show="form.submitting">Verificando…</span>
           </button>
         </form>
 
-        <div class="mt-8 pt-6 border-t border-slate-700/50 text-center">
-          <p class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
+        <div class="mt-8 pt-6 border-t border-slate-700 text-center">
+          <p class="text-[10px] text-slate-500 font-bold tracking-widest">
             © 2026 WORKCHAIN ERP | SEGURIDAD INDUSTRIAL
           </p>
         </div>
@@ -97,124 +73,79 @@ import Layout from '../layouts/Layout.astro';
   </div>
 </Layout>
 
-<!-- CLIENT-SIDE SCRIPT: usa fetch a tus endpoints internos (no importa si estás en Render o local) -->
-<script type="module">
-  // Declaraciones para TypeScript/IDE (opcional)
-  // window.loginForm = function () { ... }
+<script>
+  // @ts-nocheck
+  document.addEventListener('alpine:init', () => {
+    window.Alpine.store('app', {
+      currentTenantName: null,
+      async checkSession() {}
+    })
+  })
 
-  window.loginForm = function () {
-    return {
-      form: {
-        email: '',
-        password: '',
-        remember: false,
-        tenantId: '',
-        submitting: false,
-        error: '',
-      },
-      organizations: [],
-      detectedTenantName: '',
-      isSubdomain: false,
-      connectionStatus: 'loading', // 'loading' | 'connected' | 'error'
+  // Usamos casting a 'any' para forzar la aceptación de la propiedad en window
+  window.loginForm = () => ({
+    form: {
+      email: '',
+      password: '',
+      tenantId: '',
+      submitting: false,
+      error: ''
+    },
+    organizations: [],
+    detectedTenantName: '',
+    isSubdomain: false,
 
-      async init() {
-        // Detectar subdominio / dominio y tratar de resolver tenant por dominio
-        const hostname = window.location.hostname;
+    async init() {
+      const hostname = window.location.hostname
 
-        // Si tu dominio de producción es exactamente 'workchain-erp.onrender.com' ignora como subdominio.
-        const publicHosts = ['workchain-erp.onrender.com', 'localhost', '127.0.0.1'];
-
-        if (!publicHosts.includes(hostname)) {
-          try {
-            // Llamar endpoint que resuelve tenant por dominio
-            const res = await fetch(`/api/tenant-by-domain?domain=${encodeURIComponent(hostname)}`);
-            if (res.ok) {
-              const tenant = await res.json();
-              if (tenant && tenant.id) {
-                this.form.tenantId = tenant.id;
-                this.detectedTenantName = tenant.name || '';
-                this.isSubdomain = true;
-                this.connectionStatus = 'connected';
-                // sincronizar nombre en el store app
-                if (window.Alpine) window.Alpine.store('app').currentTenantName = tenant.name || null;
-                return;
-              }
-            }
-          } catch (e) {
-            console.error('Error detectando tenant por dominio', e);
+      try {
+        const res = await fetch(`/api/tenant-by-domain?domain=${hostname}`)
+        if (res.ok) {
+          const tenant = await res.json()
+          if (tenant && tenant.id) {
+            this.form.tenantId = tenant.id
+            this.detectedTenantName = tenant.name
+            this.isSubdomain = true
+            window.Alpine.store('app').currentTenantName = tenant.name
+            return
           }
         }
+      } catch (_) {}
 
-        // Si no se detectó subdominio, cargar lista de tenants
-        await this.loadTenants();
-      },
+      await this.loadTenants()
+    },
 
-      async loadTenants() {
-        try {
-          this.connectionStatus = 'loading';
-          const res = await fetch('/api/tenants');
-          if (!res.ok) throw new Error('No se pudieron cargar las organizaciones');
-          const data = await res.json();
-          this.organizations = Array.isArray(data) ? data : [];
-          this.connectionStatus = 'connected';
-        } catch (e) {
-          this.form.error = (e && e.message) ? e.message : 'Error al conectar';
-          this.connectionStatus = 'error';
+    async loadTenants() {
+      const res = await fetch('/api/tenants')
+      this.organizations = await res.json()
+    },
+
+    async submit() {
+      this.form.submitting = true
+      this.form.error = ''
+
+      try {
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(this.form)
+        })
+
+        if (!res.ok) {
+          throw new Error('Credenciales inválidas')
         }
-      },
 
-      async submit() {
-        if (this.form.submitting) return;
-        this.form.error = '';
-        this.form.submitting = true;
-
-        try {
-          // Validaciones sencillas (opcional)
-          if (!this.form.email || !this.form.password) {
-            throw new Error('Ingrese correo y contraseña');
-          }
-          if (!this.form.tenantId && !this.isSubdomain) {
-            throw new Error('Seleccione la organización');
-          }
-
-          const res = await fetch('/api/auth/login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              email: this.form.email,
-              password: this.form.password,
-              tenant_id: this.form.tenantId,
-              remember: this.form.remember
-            })
-          });
-
-          if (!res.ok) {
-            const err = await res.json().catch(()=>({ message: 'Credenciales inválidas' }));
-            throw new Error(err.message || 'Credenciales inválidas');
-          }
-
-          // actualizar store y redirigir
-          if (window.Alpine) {
-            await window.Alpine.store('app').checkSession();
-          }
-          window.location.href = '/dashboard'; // ajusta la ruta si tienes otra
-        } catch (e) {
-          this.form.error = (e && e.message) ? e.message : 'Error de conexión';
-        } finally {
-          this.form.submitting = false;
-        }
+        window.location.href = '/dashboard'
+      } catch (e) {
+        const err = e instanceof Error ? e.message : 'Error de conexión'
+        this.form.error = err
+      } finally {
+        this.form.submitting = false
       }
     }
-  }
+  })
 </script>
 
 <style>
   [x-cloak] { display: none !important; }
-  .animate-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
-  @keyframes shake {
-    10%, 90% { transform: translate3d(-1px, 0, 0); }
-    20%, 80% { transform: translate3d(2px, 0, 0); }
-    30%, 50%, 70% { transform: translate3d(-4px, 0, 0); }
-    40%, 60% { transform: translate3d(4px, 0, 0); }
-  }
 </style>
