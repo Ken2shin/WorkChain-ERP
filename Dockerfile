@@ -37,7 +37,7 @@ RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
     && rm /tmp/dotnet-install.sh
 
 WORKDIR /app/services
-COPY ./services ./
+COPY ./services ./ 
 RUN mkdir -p bin_outputs
 
 
@@ -62,7 +62,7 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 
 # COPIAR CÓDIGO LARAVEL (debe contener artisan)
-COPY ./laravel ./
+COPY ./laravel ./ 
 
 # Evitar que Composer ejecute scripts (que llaman a artisan) en build
 RUN composer install \
@@ -71,8 +71,10 @@ RUN composer install \
     --optimize-autoloader \
     --no-scripts
 
-# Binarios multi-lenguaje (opcional, si existen)
-COPY --from=multi-builder /app/services/bin_outputs/* ./bin/ || true
+# Binarios multi-lenguaje: copiar contenido del directorio bin_outputs (no usa glob)
+# la sintaxis '/app/services/bin_outputs/.' copia los contenidos (si están vacíos, no falla)
+RUN mkdir -p ./bin
+COPY --from=multi-builder /app/services/bin_outputs/. ./bin/
 
 # CACHE Y PERMISOS (CRÍTICO)
 RUN mkdir -p storage/framework/sessions \
