@@ -41,66 +41,65 @@ COPY ./services .
 RUN mkdir -p bin_outputs
 
 # ==========================================
-# ETAPA 2: BUILD DEL FRONTEND (ASTRO 5 + TAILWIND 3)
+# ETAPA 2: BUILD DEL FRONTEND (ASTRO SERVER)
 # ==========================================
 FROM node:22-slim AS frontend-builder
+
 RUN npm install -g pnpm
 WORKDIR /app/frontend
+
 COPY ./frontend/package.json ./frontend/pnpm-lock.yaml* ./
 RUN pnpm install
+
 COPY ./frontend .
-# Esto generará la carpeta /app/frontend/dist gracias al cambio en astro.config.mjs
 RUN pnpm run build
 
 # ==========================================
-# ETAPA 3: IMAGEN FINAL DE PRODUCCIÓN (PHP 8.3)
+# ETAPA 3: PRODUCCIÓN (PHP + NODE PARA ASTRO)
 # ==========================================
 FROM php:8.3-fpm
 
-# 1. Instalar librerías del sistema (libicu76 + zip + runtimes)
+# 🔥 Node.js es OBLIGATORIO porque Astro es server
+RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
+    && apt-get install -y nodejs
+
 RUN apt-get update && apt-get install -y --no-install-recommends \
     wget gnupg ca-certificates nginx supervisor \
     git curl zip unzip libpq-dev libonig-dev libxml2-dev libzip-dev \
     libstdc++6 libgcc-s1 libicu76 \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Instalar .NET Runtime
+# .NET Runtime
 RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
     && bash /tmp/dotnet-install.sh --channel 8.0 --runtime dotnet --install-dir /usr/share/dotnet \
     && ln -s /usr/share/dotnet/dotnet /usr/bin/dotnet \
     && rm /tmp/dotnet-install.sh
 
-# 3. Extensiones PHP (Incluye zip vital para Composer)
+# PHP extensions
 RUN docker-php-ext-install pdo pdo_pgsql mbstring xml pcntl bcmath zip
 
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# 4. Backend Laravel (Con --no-scripts para evitar error de artisan)
+# Backend Laravel
 COPY ./laravel .
 RUN composer install --no-interaction --optimize-autoloader --no-dev --no-scripts
 
-# 5. Frontend y Binarios
-# CORRECCIÓN CRÍTICA: Copiamos 'dist' DIRECTAMENTE a './public'
-# Esto coloca el index.html donde Laravel lo espera.
-COPY --from=frontend-builder /app/frontend/dist ./public
+# 🔥 ASTRO SERVER COMPLETO
+COPY --from=frontend-builder /app/frontend/dist ./astro
+
+# Binarios
 COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 
-# 6. Configuración de Servidor
+# Nginx + Supervisor
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/worker.conf
 
-# 7. Crear carpetas faltantes antes de asignar permisos
-RUN mkdir -p /var/www/storage/framework/sessions \
-    /var/www/storage/framework/views \
-    /var/www/storage/framework/cache \
-    /var/www/storage/logs \
-    /var/www/bootstrap/cache
-
-# 8. Asignar Permisos Correctos
-RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
-RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
+# Permisos Laravel
+RUN mkdir -p storage/framework/{sessions,views,cache} storage/logs bootstrap/cache
+RUN chown -R www-data:www-data storage bootstrap/cache
+RUN chmod -R 775 storage bootstrap/cache
 
 EXPOSE 80
 
