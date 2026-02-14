@@ -5,10 +5,16 @@ use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
 
-// Middlewares personalizados (Asumiendo que los creaste o crearás)
-use App\Http\Middleware\IdentifyTenant;       // <--- CRÍTICO para el filtrado
-use App\Http\Middleware\NanoSecurityMesh;     // <--- Tu motor C++/Rust
-use App\Http\Middleware\SecurityHeaders;      // Headers HSTS, CSP, etc.
+// --------------------------------------------------------------------------
+// NOTA IMPORTANTE:
+// He comentado los imports de tus clases personalizadas.
+// NO los descomentes hasta que hayamos creado los archivos en /app/Http/Middleware
+// de lo contrario, Render te dará Error 500.
+// --------------------------------------------------------------------------
+
+// use App\Http\Middleware\IdentifyTenant;   // TODO: Descomentar cuando crees el archivo
+// use App\Http\Middleware\NanoSecurityMesh; // TODO: Descomentar cuando crees el archivo
+// use App\Http\Middleware\SecurityHeaders;  // TODO: Descomentar cuando crees el archivo
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -19,18 +25,18 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware) {
         
-        // 1. SEGURIDAD DE RED (Vital para AuditLogger)
-        // Confiar en todos los proxies (necesario en contenedores/Cloudflare)
-        // para que request()->ip() sea la IP real del cliente.
+        // 1. SEGURIDAD DE RED (Vital para Render/Cloudflare)
+        // Esto permite que Laravel confíe en el proxy de Render y obtenga la IP real.
         $middleware->trustProxies(at: '*');
 
-        // 2. MIDDLEWARES GLOBALES (Se ejecutan en CADA petición)
+        // 2. MIDDLEWARES GLOBALES
+        // Se ejecutan en cada petición. Los hemos comentado para evitar el crash.
         $middleware->append([
-            SecurityHeaders::class,    // Protección XSS, Frame Options, etc.
-            NanoSecurityMesh::class,   // Tu motor de amenazas (Rust/C++)
+            // \App\Http\Middleware\SecurityHeaders::class,
+            // \App\Http\Middleware\NanoSecurityMesh::class,
         ]);
 
-        // 3. GRUPOS DE RUTAS
+        // 3. GRUPOS DE RUTAS WEB
         $middleware->group('web', [
             \Illuminate\Cookie\Middleware\EncryptCookies::class,
             \Illuminate\Cookie\Middleware\AddQueuedCookiesToResponse::class,
@@ -38,34 +44,31 @@ return Application::configure(basePath: dirname(__DIR__))
             \Illuminate\View\Middleware\ShareErrorsFromSession::class,
             \Illuminate\Foundation\Http\Middleware\ValidateCsrfToken::class,
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            // CRÍTICO: Identificar la organización ANTES de que el usuario intente loguearse
-            IdentifyTenant::class, 
+            // \App\Http\Middleware\IdentifyTenant::class, // TODO: Activar luego
         ]);
 
+        // 4. GRUPOS DE RUTAS API
         $middleware->group('api', [
-            // 'throttle:api', // Desactivamos el throttle nativo porque usas el de Rust
             \Illuminate\Routing\Middleware\SubstituteBindings::class,
-            // CRÍTICO: Identificar la organización en la API también
-            IdentifyTenant::class,
+            // \App\Http\Middleware\IdentifyTenant::class, // TODO: Activar luego
         ]);
 
-        // 4. ALIAS (Para usar en rutas específicas)
+        // 5. ALIAS
+        // Solo descomenta si los archivos existen en app/Http/Middleware/
         $middleware->alias([
-            'role' => \App\Http\Middleware\CheckRole::class,
-            'permission' => \App\Http\Middleware\CheckPermission::class,
-            'tenant.active' => \App\Http\Middleware\EnsureTenantIsActive::class,
+            // 'role' => \App\Http\Middleware\CheckRole::class,
+            // 'permission' => \App\Http\Middleware\CheckPermission::class,
+            // 'tenant.active' => \App\Http\Middleware\EnsureTenantIsActive::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions) {
-        // Manejo de excepciones de seguridad para no revelar stack traces
+        // Dejamos esto preparado para cuando actives la seguridad
+        /*
         $exceptions->render(function (\App\Exceptions\Security\TenantNotFoundException $e, Request $request) {
             return response()->json([
                 'error' => 'Organization not found or inactive.',
                 'code' => 'TENANT_INVALID'
             ], 404);
         });
-
-        $exceptions->render(function (\App\Exceptions\Auth\InvalidTokenException $e, Request $request) {
-            return response()->json(['error' => 'Security token violation.'], 401);
-        });
+        */
     })->create();
