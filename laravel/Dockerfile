@@ -32,12 +32,16 @@ COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 WORKDIR /var/www
 
 # =========================
-# CÓDIGO LARAVEL
+# COPIAR CÓDIGO LARAVEL
 # =========================
-COPY . .
+# Asegúrate que aquí se copie la carpeta que contiene artisan
+COPY ./laravel ./
+
+# (Opcional) comprobar que artisan existe en contexto de build (puedes comentar/remove luego)
+# RUN if [ ! -f artisan ]; then echo "ERROR: artisan no encontrado en /var/www"; ls -la /var/www; exit 1; fi
 
 # =========================
-# DEPENDENCIAS PHP (FIX REAL)
+# DEPENDENCIAS PHP (FIX: NO SCRIPTS)
 # =========================
 RUN composer install \
     --no-interaction \
@@ -59,11 +63,12 @@ RUN chown -R www-data:www-data storage bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
 
 # =========================
-# NGINX + SUPERVISOR
+# NGINX + SUPERVISOR (copiar config desde la ruta correcta)
 # =========================
-COPY ../docker/nginx.conf /etc/nginx/sites-available/default
-COPY ../docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
+COPY ./docker/nginx.conf /etc/nginx/sites-available/default
+COPY ./docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
 
 EXPOSE 80
 
-CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/laravel.conf"]
+# PROCESO ÚNICO para Render / producción
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]

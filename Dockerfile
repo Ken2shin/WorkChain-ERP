@@ -37,7 +37,7 @@ RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
     && rm /tmp/dotnet-install.sh
 
 WORKDIR /app/services
-COPY ./services .
+COPY ./services ./
 RUN mkdir -p bin_outputs
 
 
@@ -48,6 +48,7 @@ RUN mkdir -p bin_outputs
 FROM php:8.3-fpm
 
 ENV DEBIAN_FRONTEND=noninteractive
+ENV COMPOSER_ALLOW_SUPERUSER=1
 
 RUN apt-get update && apt-get install -y \
     nginx curl zip unzip git \
@@ -55,18 +56,25 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo pdo_pgsql mbstring zip \
     && rm -rf /var/lib/apt/lists/*
 
+# Composer binario
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
 WORKDIR /var/www
 
-# Laravel
-COPY ./laravel .
-RUN composer install --no-dev --optimize-autoloader
+# COPIAR CÓDIGO LARAVEL (debe contener artisan)
+COPY ./laravel ./
 
-# Binarios multi-lenguaje
-COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
+# Evitar que Composer ejecute scripts (que llaman a artisan) en build
+RUN composer install \
+    --no-interaction \
+    --no-dev \
+    --optimize-autoloader \
+    --no-scripts
 
-# Cache Laravel (CRÍTICO)
+# Binarios multi-lenguaje (opcional, si existen)
+COPY --from=multi-builder /app/services/bin_outputs/* ./bin/ || true
+
+# CACHE Y PERMISOS (CRÍTICO)
 RUN mkdir -p storage/framework/sessions \
     storage/framework/views \
     storage/framework/cache \
@@ -75,7 +83,11 @@ RUN mkdir -p storage/framework/sessions \
  && chown -R www-data:www-data storage bootstrap/cache \
  && chmod -R 775 storage bootstrap/cache
 
+# Nginx / Supervisor config (se copian desde tu repo)
+COPY ./docker/nginx.conf /etc/nginx/sites-available/default
+COPY ./docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
+
 EXPOSE 8000
 
-# 🔥 PROCESO ÚNICO (RENDER / PRODUCCIÓN)
-CMD php artisan serve --host=0.0.0.0 --port=8000
+# Proceso único para producción / Render
+CMD ["php", "artisan", "serve", "--host=0.0.0.0", "--port=8000"]
