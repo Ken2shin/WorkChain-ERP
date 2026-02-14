@@ -9,6 +9,8 @@ FROM golang:1.22-bookworm AS go-source
 # ==========================================
 FROM debian:bookworm-slim AS multi-builder
 
+ENV DEBIAN_FRONTEND=noninteractive
+
 RUN apt-get update && apt-get install -y \
     curl wget gnupg ca-certificates \
     build-essential clang lldb lld nasm \
@@ -45,8 +47,8 @@ RUN mkdir -p bin_outputs
 # ==========================================
 FROM node:22-slim AS frontend-builder
 
-RUN npm install -g pnpm
 WORKDIR /app/frontend
+RUN npm install -g pnpm
 
 COPY ./frontend/package.json ./frontend/pnpm-lock.yaml* ./
 RUN pnpm install
@@ -59,7 +61,9 @@ RUN pnpm run build
 # ==========================================
 FROM php:8.3-fpm
 
-# 🔥 Node.js es OBLIGATORIO porque Astro es server
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Node.js requerido para Astro Server
 RUN curl -fsSL https://deb.nodesource.com/setup_22.x | bash - \
     && apt-get install -y nodejs
 
@@ -86,7 +90,7 @@ WORKDIR /var/www
 COPY ./laravel .
 RUN composer install --no-interaction --optimize-autoloader --no-dev --no-scripts
 
-# 🔥 ASTRO SERVER COMPLETO
+# ASTRO SERVER
 COPY --from=frontend-builder /app/frontend/dist ./astro
 
 # Binarios
@@ -96,10 +100,15 @@ COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/worker.conf
 
-# Permisos Laravel
-RUN mkdir -p storage/framework/{sessions,views,cache} storage/logs bootstrap/cache
-RUN chown -R www-data:www-data storage bootstrap/cache
-RUN chmod -R 775 storage bootstrap/cache
+# 🔥 CACHE LARAVEL (CRÍTICO – SOLUCIÓN DEFINITIVA)
+RUN mkdir -p /var/www/storage/framework/sessions \
+    /var/www/storage/framework/views \
+    /var/www/storage/framework/cache \
+    /var/www/storage/logs \
+    /var/www/bootstrap/cache
+
+RUN chown -R www-data:www-data /var/www/storage /var/www/bootstrap/cache
+RUN chmod -R 775 /var/www/storage /var/www/bootstrap/cache
 
 EXPOSE 80
 
