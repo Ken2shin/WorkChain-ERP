@@ -6,32 +6,48 @@ FROM php:8.3-fpm
 
 ENV DEBIAN_FRONTEND=noninteractive
 
-# Dependencias del sistema
+# =========================
+# DEPENDENCIAS DEL SISTEMA
+# =========================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     nginx supervisor \
     git curl zip unzip \
     libpq-dev libonig-dev libxml2-dev libzip-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Extensiones PHP
+# =========================
+# EXTENSIONES PHP
+# =========================
 RUN docker-php-ext-install \
     pdo pdo_pgsql mbstring xml bcmath zip pcntl
 
-# Composer
+# =========================
+# COMPOSER
+# =========================
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
+# =========================
+# WORKDIR
+# =========================
 WORKDIR /var/www
 
-# Código Laravel
+# =========================
+# CÓDIGO LARAVEL
+# =========================
 COPY . .
 
-# Dependencias PHP
+# =========================
+# DEPENDENCIAS PHP (FIX REAL)
+# =========================
 RUN composer install \
     --no-interaction \
+    --no-dev \
     --optimize-autoloader \
-    --no-dev
+    --no-scripts
 
-# 🔥 CACHE Y PERMISOS (CLAVE)
+# =========================
+# CACHE Y PERMISOS (CLAVE)
+# =========================
 RUN mkdir -p \
     storage/framework/sessions \
     storage/framework/views \
@@ -42,7 +58,9 @@ RUN mkdir -p \
 RUN chown -R www-data:www-data storage bootstrap/cache
 RUN chmod -R 775 storage bootstrap/cache
 
-# Config Nginx y Supervisor
+# =========================
+# NGINX + SUPERVISOR
+# =========================
 COPY ../docker/nginx.conf /etc/nginx/sites-available/default
 COPY ../docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
 
