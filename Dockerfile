@@ -1,5 +1,5 @@
 # ==========================================
-# BUILDER MULTI-LENGUAJE
+# BUILDER MULTI-LENGUAJE (SERVICIOS INTERNOS)
 # ==========================================
 
 FROM swift:6.0-bookworm AS swift-source
@@ -39,3 +39,43 @@ RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
 WORKDIR /app/services
 COPY ./services .
 RUN mkdir -p bin_outputs
+
+
+# ==========================================
+# BACKEND LARAVEL (PRODUCCIÓN)
+# ==========================================
+
+FROM php:8.3-fpm
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+RUN apt-get update && apt-get install -y \
+    nginx curl zip unzip git \
+    libpq-dev libonig-dev libxml2-dev libzip-dev \
+    && docker-php-ext-install pdo pdo_pgsql mbstring zip \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
+
+WORKDIR /var/www
+
+# Laravel
+COPY ./laravel .
+RUN composer install --no-dev --optimize-autoloader
+
+# Binarios multi-lenguaje
+COPY --from=multi-builder /app/services/bin_outputs/* ./bin/
+
+# Cache Laravel (CRÍTICO)
+RUN mkdir -p storage/framework/sessions \
+    storage/framework/views \
+    storage/framework/cache \
+    storage/logs \
+    bootstrap/cache \
+ && chown -R www-data:www-data storage bootstrap/cache \
+ && chmod -R 775 storage bootstrap/cache
+
+EXPOSE 8000
+
+# 🔥 PROCESO ÚNICO (RENDER / PRODUCCIÓN)
+CMD php artisan serve --host=0.0.0.0 --port=8000
