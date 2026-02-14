@@ -11,42 +11,21 @@ import Layout from '../layouts/Layout.astro';
               <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z" />
             </svg>
           </div>
-          <h1 class="text-3xl font-bold text-white mb-2"
-              x-text="$store.app?.currentTenantName || 'WorkChain ERP'"></h1>
-          <p class="text-slate-400"
-             x-text="$store.app?.currentTenantName ? 'Acceso Corporativo' : 'Sistema de Gestión Empresarial'"></p>
+          <h1 class="text-3xl font-bold text-white mb-2">WorkChain ERP</h1>
+          <p class="text-slate-400">Sistema de Gestión Empresarial</p>
         </div>
 
         <form @submit.prevent="submit()" class="space-y-5">
-          <div x-show="!isSubdomain">
-            <label class="block text-sm font-semibold text-slate-300 mb-2">Organización</label>
-            <select
-              x-model="form.tenantId"
-              required
-              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white">
-              <option value="" disabled>Selecciona tu empresa</option>
-              <template x-for="org in organizations" :key="org.id">
-                <option :value="org.id" x-text="org.name"></option>
-              </template>
-            </select>
-          </div>
-
-          <div x-show="isSubdomain" class="p-4 bg-blue-500/10 border border-blue-500/20 rounded-xl">
-            <span class="text-sm text-blue-400">
-              Organización: <b x-text="detectedTenantName"></b>
-            </span>
-          </div>
-
           <div>
-            <label class="block text-sm font-semibold text-slate-300 mb-2">Correo</label>
+            <label class="block text-sm font-semibold text-slate-300 mb-2">Correo Electrónico</label>
             <input type="email" x-model="form.email" required
-              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white">
+              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors">
           </div>
 
           <div>
             <label class="block text-sm font-semibold text-slate-300 mb-2">Contraseña</label>
             <input type="password" x-model="form.password" required
-              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white">
+              class="w-full px-4 py-3 bg-slate-900/50 border border-slate-700 rounded-xl text-white focus:outline-none focus:border-blue-500 transition-colors">
           </div>
 
           <template x-if="form.error">
@@ -56,10 +35,10 @@ import Layout from '../layouts/Layout.astro';
           </template>
 
           <button type="submit"
-            class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl"
+            class="w-full py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl transition-all"
             :disabled="form.submitting">
             <span x-show="!form.submitting">Entrar al Sistema</span>
-            <span x-show="form.submitting">Verificando…</span>
+            <span x-show="form.submitting">Verificando...</span>
           </button>
         </form>
 
@@ -77,70 +56,42 @@ import Layout from '../layouts/Layout.astro';
   // @ts-nocheck
   document.addEventListener('alpine:init', () => {
     window.Alpine.store('app', {
-      currentTenantName: null,
       async checkSession() {}
     })
   })
 
-  // Usamos casting a 'any' para forzar la aceptación de la propiedad en window
   window.loginForm = () => ({
     form: {
       email: '',
       password: '',
-      tenantId: '',
       submitting: false,
       error: ''
     },
-    organizations: [],
-    detectedTenantName: '',
-    isSubdomain: false,
-
-    async init() {
-      const hostname = window.location.hostname
-
-      try {
-        const res = await fetch(`/api/tenant-by-domain?domain=${hostname}`)
-        if (res.ok) {
-          const tenant = await res.json()
-          if (tenant && tenant.id) {
-            this.form.tenantId = tenant.id
-            this.detectedTenantName = tenant.name
-            this.isSubdomain = true
-            window.Alpine.store('app').currentTenantName = tenant.name
-            return
-          }
-        }
-      } catch (_) {}
-
-      await this.loadTenants()
-    },
-
-    async loadTenants() {
-      const res = await fetch('/api/tenants')
-      this.organizations = await res.json()
-    },
 
     async submit() {
-      this.form.submitting = true
-      this.form.error = ''
+      this.form.submitting = true;
+      this.form.error = '';
 
       try {
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(this.form)
-        })
+          body: JSON.stringify({
+            email: this.form.email,
+            password: this.form.password
+          })
+        });
 
         if (!res.ok) {
-          throw new Error('Credenciales inválidas')
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.message || 'Credenciales inválidas');
         }
 
-        window.location.href = '/dashboard'
+        window.location.href = '/dashboard';
       } catch (e) {
-        const err = e instanceof Error ? e.message : 'Error de conexión'
-        this.form.error = err
+        this.form.error = e instanceof Error ? e.message : 'Error de conexión';
       } finally {
-        this.form.submitting = false
+        this.form.submitting = false;
       }
     }
   })
