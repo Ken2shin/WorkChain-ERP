@@ -1,6 +1,7 @@
 ---
 import Layout from '../layouts/Layout.astro';
 ---
+
 <Layout title="Login - WorkChain ERP">
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
@@ -52,13 +53,16 @@ import Layout from '../layouts/Layout.astro';
   </div>
 </Layout>
 
-<script>
-  // @ts-nocheck
+<script is:inline>
+  /**
+   * Al usar is:inline, el compilador de Astro ignora el tipado de TS,
+   * eliminando los errores de "interface" y "Property loginForm does not exist".
+   */
   document.addEventListener('alpine:init', () => {
     window.Alpine.store('app', {
       async checkSession() {}
-    })
-  })
+    });
+  });
 
   window.loginForm = () => ({
     form: {
@@ -73,6 +77,7 @@ import Layout from '../layouts/Layout.astro';
       this.form.error = '';
 
       try {
+        // La conexión con login.ts ocurre aquí a través del fetch
         const res = await fetch('/api/auth/login', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -82,19 +87,21 @@ import Layout from '../layouts/Layout.astro';
           })
         });
 
+        const data = await res.json().catch(() => ({}));
+
         if (!res.ok) {
-          const errorData = await res.json().catch(() => ({}));
-          throw new Error(errorData.message || 'Credenciales inválidas');
+          throw new Error(data.message || 'Credenciales inválidas');
         }
 
+        // Si el login en login.ts es exitoso, redirigimos
         window.location.href = '/dashboard';
       } catch (e) {
-        this.form.error = e instanceof Error ? e.message : 'Error de conexión';
+        this.form.error = e.message || 'Error de conexión';
       } finally {
         this.form.submitting = false;
       }
     }
-  })
+  });
 </script>
 
 <style>
