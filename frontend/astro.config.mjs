@@ -1,23 +1,27 @@
 import { defineConfig } from 'astro/config';
 import alpinejs from '@astrojs/alpinejs';
 import tailwind from '@astrojs/tailwind';
+import node from '@astrojs/node'; // Requerido para procesar el Login en el servidor
 
 export default defineConfig({
-  // 1. Mantenemos 'static' para generar HTML real (Necesario para Laravel)
-  output: 'static',
+  // 1. CAMBIO CRÍTICO: Usamos 'server' para que las API Routes (POST) funcionen.
+  // El modo 'static' no permite recibir datos de formularios.
+  output: 'server',
 
-  // 2. CORRECCIÓN: Eliminamos 'outDir' para que Astro genere la carpeta 'dist' por defecto.
-  // Esto permite que Docker encuentre los archivos en la etapa de copia.
-  
-  // 3. ORGANIZACIÓN: Guardamos los assets en una subcarpeta
+  // 2. ADAPTADOR: Necesario para que Render pueda ejecutar el código de Node.js
+  adapter: node({
+    mode: 'standalone',
+  }),
+
+  // 3. ORGANIZACIÓN: Mantenemos tu estructura de assets
   build: {
     assets: '_astro',
   },
 
-  // 4. SEGURIDAD
+  // 4. SEGURIDAD: Mantenemos tu preferencia
   emptyOutDir: false,
 
-  // 5. INTEGRACIONES (Tus originales)
+  // 5. INTEGRACIONES (Tus originales intactas)
   integrations: [
     alpinejs(),
     tailwind({
@@ -25,7 +29,7 @@ export default defineConfig({
     })
   ],
 
-  // 6. SEGURIDAD & VITE
+  // 6. SEGURIDAD & VITE (Tus configuraciones originales)
   vite: {
     build: {
       minify: 'esbuild',
@@ -34,5 +38,9 @@ export default defineConfig({
     ssr: {
       noExternal: ['alpinejs'],
     },
+    // Optimizamos la carga de variables de entorno para Render
+    define: {
+      'process.env': process.env
+    }
   },
 });
