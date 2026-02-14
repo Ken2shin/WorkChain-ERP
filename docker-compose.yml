@@ -1,7 +1,9 @@
-version: '3.8'
+version: "3.8"
 
 services:
-  # PostgreSQL Database
+  # =========================
+  # PostgreSQL
+  # =========================
   postgres:
     image: postgres:16-alpine
     container_name: workchain_postgres
@@ -9,147 +11,111 @@ services:
       POSTGRES_DB: workchain_erp
       POSTGRES_USER: workchain_user
       POSTGRES_PASSWORD: secure_password_change_me
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - workchain_network
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U workchain_user"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
 
-  # Edge Gateway (Caddy)
-  gateway:
-    image: caddy:2.8
-    container_name: workchain_gateway
-    ports:
-      - "443:443"
-      - "80:80"
-      - "9090:9090"
-    volumes:
-      - ./edge-gateway/Caddyfile:/etc/caddy/Caddyfile
-      - caddy_data:/data
-      - caddy_config:/config
-    networks:
-      - workchain_network
-    depends_on:
-      - laravel
-
-  # Laravel Backend (Main Orchestrator)
+  # =========================
+  # Laravel Backend
+  # =========================
   laravel:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: workchain_app
     env_file:
-      - ./.env
+      - .env
     environment:
-      DB_CONNECTION: ${DB_CONNECTION}
-      DB_HOST: ${DB_HOST}
-      DB_PORT: ${DB_PORT}
-      DB_DATABASE: ${DB_DATABASE}
-      DB_USERNAME: ${DB_USERNAME}
-      DB_PASSWORD: ${DB_PASSWORD}
-      APP_ENV: ${APP_ENV}
-      APP_DEBUG: ${APP_DEBUG}
-      APP_KEY: ${APP_KEY}
-      JWT_SECRET: ${JWT_SECRET}
-      CRYPTO_SERVICE_URL: ${CRYPTO_SERVICE_URL}
-      ANOMALY_SERVICE_URL: ${ANOMALY_SERVICE_URL}
-    ports:
-      - "8000:8000"
-    volumes:
-      - .:/app
-      - /app/node_modules
-      - /app/vendor
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_DATABASE: workchain_erp
+      DB_USERNAME: workchain_user
+      DB_PASSWORD: secure_password_change_me
+      APP_ENV: production
+      APP_DEBUG: "false"
     depends_on:
       - postgres
       - crypto-service
       - anomaly-detector
     networks:
       - workchain_network
-    command: php artisan serve --host=0.0.0.0 --port=8000
 
-  # Go Cryptographic Service
-  crypto-service:
-    build:
-      context: ./services/go/crypto-service
-      dockerfile: Dockerfile
-    container_name: workchain_crypto
-    env_file:
-      - ./.env
-    environment:
-      JWT_SECRET: ${JWT_SECRET}
-      PORT: 3000
-    ports:
-      - "3000:3000"
-    networks:
-      - workchain_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
-  # Rust Anomaly Detection Service
-  anomaly-detector:
-    build:
-      context: ./services/rust/anomaly-detector
-      dockerfile: Dockerfile
-    container_name: workchain_anomaly
-    env_file:
-      - ./.env
-    environment:
-      RUST_LOG: info
-      PORT: 3001
-    ports:
-      - "3001:3001"
-    networks:
-      - workchain_network
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:3001/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
-
+  # =========================
   # Astro Frontend
+  # =========================
   frontend:
     build:
       context: ./frontend
       dockerfile: Dockerfile
     container_name: workchain_frontend
     env_file:
-      - ./.env
+      - .env
     environment:
-      PUBLIC_API_BASE: ${PUBLIC_API_BASE}
-      PUBLIC_SUPABASE_URL: ${PUBLIC_SUPABASE_URL}
-      PUBLIC_SUPABASE_ANON_KEY: ${PUBLIC_SUPABASE_ANON_KEY}
-    ports:
-      - "3002:3002"
-    networks:
-      - workchain_network
+      PUBLIC_API_BASE: https://api.workchain.com
     depends_on:
       - laravel
+    networks:
+      - workchain_network
 
-  # Redis Cache (optional, for rate limiting distribution)
+  # =========================
+  # Go Crypto Service
+  # =========================
+  crypto-service:
+    build:
+      context: ./services/go/crypto-service
+      dockerfile: Dockerfile
+    container_name: workchain_crypto
+    env_file:
+      - .env
+    environment:
+      PORT: 3000
+    networks:
+      - workchain_network
+
+  # =========================
+  # Rust Anomaly Detector
+  # =========================
+  anomaly-detector:
+    build:
+      context: ./services/rust/anomaly-detector
+      dockerfile: Dockerfile
+    container_name: workchain_anomaly
+    env_file:
+      - .env
+    environment:
+      PORT: 3001
+    networks:
+      - workchain_network
+
+  # =========================
+  # Redis
+  # =========================
   redis:
     image: redis:7-alpine
     container_name: workchain_redis
-    env_file:
-      - ./.env
     command: redis-server --requirepass ${REDIS_PASSWORD}
-    ports:
-      - "6379:6379"
     networks:
       - workchain_network
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 3
+
+  # =========================
+  # Caddy Gateway (ÚNICO expuesto)
+  # =========================
+  gateway:
+    image: caddy:2.8
+    container_name: workchain_gateway
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./edge-gateway/Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - frontend
+      - laravel
+    networks:
+      - workchain_network
 
 volumes:
   postgres_data:
