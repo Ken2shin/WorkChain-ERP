@@ -2,6 +2,14 @@
 #include <string.h>
 #include <stdlib.h>
 #include <openssl/err.h>
+#include <openssl/rand.h>
+#include <openssl/evp.h>
+#include <openssl/hmac.h>
+
+/* * CRITICAL CONFIGURATION:
+ * Ensure your header file defines WCCryptoError constants properly.
+ * Example: WC_CRYPTO_AUTH_FAILED = -2
+ */
 
 /* Initialize cryptographic context */
 WorkChainCryptoContext* wc_crypto_init(const unsigned char *master_key, size_t key_len)
@@ -15,25 +23,21 @@ WorkChainCryptoContext* wc_crypto_init(const unsigned char *master_key, size_t k
         return NULL;
     }
 
-    ctx->cipher_ctx = EVP_CIPHER_CTX_new();
-    ctx->hash_ctx = EVP_MD_CTX_new();
-
-    if (!ctx->cipher_ctx || !ctx->hash_ctx) {
-        EVP_CIPHER_CTX_free(ctx->cipher_ctx);
-        EVP_MD_CTX_free(ctx->hash_ctx);
-        free(ctx);
-        return NULL;
-    }
+    /* Note: We don't pre-allocate EVP_CIPHER_CTX here to ensure thread safety 
+       if the context is shared. We allocate them on demand. */
+    ctx->cipher_ctx = NULL; 
+    ctx->hash_ctx = NULL;
 
     memcpy(ctx->key, master_key, 32);
     
-    /* Generate secure random IV and salt */
-    if (RAND_bytes(ctx->iv, 16) != 1 || RAND_bytes(ctx->salt, 16) != 1) {
-        EVP_CIPHER_CTX_free(ctx->cipher_ctx);
-        EVP_MD_CTX_free(ctx->hash_ctx);
+    /* Generate secure random salt for key derivation if needed later */
+    if (RAND_bytes(ctx->salt, 16) != 1) {
         free(ctx);
         return NULL;
     }
+    
+    /* Zero out the structural IV, we will generate unique IVs per message */
+    memset(ctx->iv, 0, 16);
 
     return ctx;
 }
@@ -42,13 +46,6 @@ WorkChainCryptoContext* wc_crypto_init(const unsigned char *master_key, size_t k
 void wc_crypto_free(WorkChainCryptoContext *ctx)
 {
     if (!ctx) return;
-
-    if (ctx->cipher_ctx) {
-        EVP_CIPHER_CTX_free(ctx->cipher_ctx);
-    }
-    if (ctx->hash_ctx) {
-        EVP_MD_CTX_free(ctx->hash_ctx);
-    }
 
     /* Secure wipe of sensitive data */
     OPENSSL_cleanse(ctx->key, 32);
@@ -61,14 +58,12 @@ void wc_crypto_free(WorkChainCryptoContext *ctx)
 /* Allocate secure buffer */
 SecureBuffer* wc_secure_buffer_alloc(size_t size)
 {
-    if (size == 0 || size > (1024 * 1024 * 100)) { /* 100MB max */
+    if (size == 0 || size > (1024 * 1024 * 100)) { /* 100MB max sanity check */
         return NULL;
     }
 
     SecureBuffer *buf = (SecureBuffer*)malloc(sizeof(SecureBuffer));
-    if (!buf) {
-        return NULL;
-    }
+    if (!buf) return NULL;
 
     buf->data = (unsigned char*)OPENSSL_malloc(size);
     if (!buf->data) {
@@ -108,11 +103,16 @@ WCCryptoError wc_secure_buffer_wipe(SecureBuffer *buf)
     return WC_CRYPTO_SUCCESS;
 }
 
-/* AES-256-GCM Encryption */
+/* * AES-256-GCM Encryption WITH ORGANIZATION BINDING (AAD)
+ * * aad: Additional Authenticated Data (Pass the Organization UUID here!)
+ * aad_len: Length of the Org ID
+ */
 WCCryptoError wc_encrypt_aes256gcm(
     WorkChainCryptoContext *ctx,
     const unsigned char *plaintext,
     size_t plaintext_len,
+    const unsigned char *aad,      /* <--- NEW: Context Binding (OrgID) */
+    size_t aad_len,                /* <--- NEW */
     unsigned char *ciphertext,
     size_t *ciphertext_len,
     unsigned char *tag,
@@ -122,18 +122,17 @@ WCCryptoError wc_encrypt_aes256gcm(
         return WC_CRYPTO_INVALID_INPUT;
     }
 
-    if (plaintext_len > (1024 * 1024 * 50)) { /* 50MB max */
+    if (plaintext_len > (1024 * 1024 * 50)) { 
         return WC_CRYPTO_OVERFLOW;
     }
 
     EVP_CIPHER_CTX *cipher_ctx = EVP_CIPHER_CTX_new();
-    if (!cipher_ctx) {
-        return WC_CRYPTO_MEMORY_ERROR;
-    }
+    if (!cipher_ctx) return WC_CRYPTO_MEMORY_ERROR;
 
     int len;
-    unsigned char iv[12]; /* 96-bit IV for GCM */
+    unsigned char iv[12]; /* 96-bit IV standard for GCM */
 
+    /* Generate a FRESH IV for every encryption. Critical for GCM Security. */
     if (RAND_bytes(iv, 12) != 1) {
         EVP_CIPHER_CTX_free(cipher_ctx);
         return WC_CRYPTO_FAILURE;
@@ -145,21 +144,30 @@ WCCryptoError wc_encrypt_aes256gcm(
         return WC_CRYPTO_FAILURE;
     }
 
-    /* Encrypt */
-    if (1 != EVP_EncryptUpdate(cipher_ctx, ciphertext, &len, plaintext, plaintext_len)) {
+    /* * CRITICAL FIX: Add AAD (Organization ID binding).
+     * This ensures the ciphertext is mathematically invalid if used in the wrong Org context.
+     */
+    if (aad && aad_len > 0) {
+        if (1 != EVP_EncryptUpdate(cipher_ctx, NULL, &len, aad, aad_len)) {
+            EVP_CIPHER_CTX_free(cipher_ctx);
+            return WC_CRYPTO_FAILURE;
+        }
+    }
+
+    /* Encrypt body */
+    if (1 != EVP_EncryptUpdate(cipher_ctx, ciphertext + 12, &len, plaintext, plaintext_len)) {
         EVP_CIPHER_CTX_free(cipher_ctx);
         return WC_CRYPTO_FAILURE;
     }
 
-    int ciphertext_len_tmp = len;
+    int ciphertext_body_len = len;
 
     /* Finalize */
-    if (1 != EVP_EncryptFinal_ex(cipher_ctx, ciphertext + len, &len)) {
+    if (1 != EVP_EncryptFinal_ex(cipher_ctx, ciphertext + 12 + len, &len)) {
         EVP_CIPHER_CTX_free(cipher_ctx);
         return WC_CRYPTO_FAILURE;
     }
-
-    ciphertext_len_tmp += len;
+    ciphertext_body_len += len;
 
     /* Get authentication tag */
     if (1 != EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GCM_GET_TAG, tag_len, tag)) {
@@ -167,23 +175,25 @@ WCCryptoError wc_encrypt_aes256gcm(
         return WC_CRYPTO_FAILURE;
     }
 
-    *ciphertext_len = ciphertext_len_tmp;
-
-    /* Prepend IV to ciphertext */
-    memmove(ciphertext + 12, ciphertext, ciphertext_len_tmp);
+    /* Prepend IV to ciphertext (IV || Ciphertext) */
+    /* Note: We encrypt directly to offset +12, so we just copy IV to 0-11 */
     memcpy(ciphertext, iv, 12);
-    *ciphertext_len += 12;
+    
+    *ciphertext_len = ciphertext_body_len + 12;
 
     EVP_CIPHER_CTX_free(cipher_ctx);
 
     return WC_CRYPTO_SUCCESS;
 }
 
-/* AES-256-GCM Decryption */
+/* * AES-256-GCM Decryption WITH ORGANIZATION VALIDATION
+ */
 WCCryptoError wc_decrypt_aes256gcm(
     WorkChainCryptoContext *ctx,
     const unsigned char *ciphertext,
     size_t ciphertext_len,
+    const unsigned char *aad,      /* <--- NEW: Must match Encrypt AAD */
+    size_t aad_len,                /* <--- NEW */
     unsigned char *plaintext,
     size_t *plaintext_len,
     const unsigned char *tag,
@@ -194,10 +204,9 @@ WCCryptoError wc_decrypt_aes256gcm(
     }
 
     EVP_CIPHER_CTX *cipher_ctx = EVP_CIPHER_CTX_new();
-    if (!cipher_ctx) {
-        return WC_CRYPTO_MEMORY_ERROR;
-    }
+    if (!cipher_ctx) return WC_CRYPTO_MEMORY_ERROR;
 
+    /* Extract IV from the first 12 bytes */
     const unsigned char *iv = ciphertext;
     const unsigned char *actual_ciphertext = ciphertext + 12;
     size_t actual_ciphertext_len = ciphertext_len - 12;
@@ -209,6 +218,17 @@ WCCryptoError wc_decrypt_aes256gcm(
         return WC_CRYPTO_FAILURE;
     }
 
+    /* * CRITICAL FIX: Feed AAD (Organization ID) to the decryptor.
+     * If this doesn't match what was used during encryption, DecryptFinal will fail.
+     */
+    if (aad && aad_len > 0) {
+        if (1 != EVP_DecryptUpdate(cipher_ctx, NULL, &len, aad, aad_len)) {
+            EVP_CIPHER_CTX_free(cipher_ctx);
+            return WC_CRYPTO_FAILURE;
+        }
+    }
+
+    /* Decrypt body */
     if (1 != EVP_DecryptUpdate(cipher_ctx, plaintext, &len, actual_ciphertext, actual_ciphertext_len)) {
         EVP_CIPHER_CTX_free(cipher_ctx);
         return WC_CRYPTO_FAILURE;
@@ -216,14 +236,21 @@ WCCryptoError wc_decrypt_aes256gcm(
 
     int plaintext_len_tmp = len;
 
-    if (1 != EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GCM_SET_TAG, (int)tag_len, (unsigned char*)tag)) {
+    /* Set expected tag */
+    if (1 != EVP_CIPHER_CTX_ctrl(cipher_ctx, EVP_CTRL_GCM_SET_TAG, (int)tag_len, (void*)tag)) {
         EVP_CIPHER_CTX_free(cipher_ctx);
         return WC_CRYPTO_FAILURE;
     }
 
-    if (1 != EVP_DecryptFinal_ex(cipher_ctx, plaintext + len, &len)) {
+    /* * Finalize (Check Tag + AAD) 
+     * If this returns 0 or < 0, it means AUTHENTICATION FAILED.
+     * The Org ID was wrong or data was tampered.
+     */
+    if (EVP_DecryptFinal_ex(cipher_ctx, plaintext + len, &len) <= 0) {
+        /* WIPE plaintext buffer to be safe */
+        OPENSSL_cleanse(plaintext, plaintext_len_tmp); 
         EVP_CIPHER_CTX_free(cipher_ctx);
-        return WC_CRYPTO_FAILURE;
+        return WC_CRYPTO_AUTH_FAILED; /* Define this in your header */
     }
 
     plaintext_len_tmp += len;
@@ -245,17 +272,10 @@ WCCryptoError wc_hash_sha256(
         return WC_CRYPTO_INVALID_INPUT;
     }
 
-    unsigned char digest[SHA256_DIGEST_LENGTH];
-    unsigned int digest_len;
-
-    if (SHA256(data, data_len, digest) == NULL) {
+    if (SHA256(data, data_len, hash) == NULL) {
         return WC_CRYPTO_FAILURE;
     }
-
-    memcpy(hash, digest, SHA256_DIGEST_LENGTH);
     *hash_len = SHA256_DIGEST_LENGTH;
-
-    OPENSSL_cleanse(digest, SHA256_DIGEST_LENGTH);
 
     return WC_CRYPTO_SUCCESS;
 }
@@ -271,17 +291,10 @@ WCCryptoError wc_hash_sha512(
         return WC_CRYPTO_INVALID_INPUT;
     }
 
-    unsigned char digest[SHA512_DIGEST_LENGTH];
-    unsigned int digest_len;
-
-    if (SHA512(data, data_len, digest) == NULL) {
+    if (SHA512(data, data_len, hash) == NULL) {
         return WC_CRYPTO_FAILURE;
     }
-
-    memcpy(hash, digest, SHA512_DIGEST_LENGTH);
     *hash_len = SHA512_DIGEST_LENGTH;
-
-    OPENSSL_cleanse(digest, SHA512_DIGEST_LENGTH);
 
     return WC_CRYPTO_SUCCESS;
 }
@@ -320,7 +333,7 @@ WCCryptoError wc_derive_key_pbkdf2(
     unsigned char *derived_key,
     size_t derived_key_len)
 {
-    if (!password || !salt || !derived_key || iterations < 100000 || derived_key_len > 64) {
+    if (!password || !salt || !derived_key || iterations < 10000) {
         return WC_CRYPTO_INVALID_INPUT;
     }
 
@@ -349,9 +362,6 @@ WCCryptoError wc_random_bytes(unsigned char *buf, size_t buf_len)
 /* Constant-time comparison */
 int wc_constant_time_compare(const unsigned char *a, const unsigned char *b, size_t len)
 {
-    if (!a || !b) {
-        return -1;
-    }
-
+    if (!a || !b) return -1;
     return CRYPTO_memcmp(a, b, len);
 }

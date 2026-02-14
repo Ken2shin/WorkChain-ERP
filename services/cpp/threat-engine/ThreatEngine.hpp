@@ -8,17 +8,15 @@
 #include <memory>
 #include <chrono>
 #include <atomic>
-#include <mutex>    // FALTABA ESTA LIBRERIA (Corrige el error de std::mutex)
+#include <mutex>
+#include <shared_mutex> // CRITICO: Corrige errores de compilación de concurrencia
 #include <queue>
 #include <algorithm>
 #include <cstring>
 
 namespace WorkChain::Security {
 
-/* Threat Detection Engine for Real-time Behavior Analysis */
-
 using TimePoint = std::chrono::high_resolution_clock::time_point;
-using Milliseconds = std::chrono::milliseconds;
 
 enum class ThreatLevel : uint8_t {
     SAFE = 0,
@@ -34,10 +32,7 @@ enum class BehaviorPattern : uint8_t {
     ENUMERATION = 2,
     PAYLOAD_INJECTION = 3,
     TIMING_ATTACK = 4,
-    RESOURCE_ABUSE = 5,
-    ANOMALOUS_LOCATION = 6,
-    DEVICE_CHANGE = 7,
-    CREDENTIAL_SPRAY = 8
+    RESOURCE_ABUSE = 5
 };
 
 struct ThreatSignature {
@@ -51,7 +46,7 @@ struct ThreatSignature {
 
 struct BehaviorMetrics {
     std::string client_id;
-    std::string resource_id; // AGREGADO: Necesario para detectar "Enumeration Attack"
+    std::string resource_id;
     TimePoint timestamp;
     BehaviorPattern pattern;
     float confidence;
@@ -75,7 +70,7 @@ public:
     
 private:
     std::unordered_map<std::string, ThreatSignature> signatures;
-    mutable std::mutex db_mutex; // 'mutable' permite bloquear el mutex en funciones const
+    mutable std::shared_mutex db_mutex; // Uso de shared_mutex para lecturas rápidas
 };
 
 class BehaviorAnalyzer {
@@ -84,6 +79,8 @@ public:
     
     void recordBehavior(const BehaviorMetrics& metrics);
     AnomalyScore analyzeBehavior(const std::string& client_id);
+    
+    // FALTABA EN TU CÓDIGO ORIGINAL:
     float calculateAnomalyScore(const std::string& client_id);
     std::vector<BehaviorPattern> detectPatterns(const std::string& client_id);
     
@@ -92,12 +89,14 @@ private:
         std::vector<BehaviorMetrics> behaviors;
         TimePoint first_seen;
         TimePoint last_seen;
-        float cumulative_risk;
     };
     
     std::unordered_map<std::string, ClientHistory> history;
     size_t max_history_size;
-    std::mutex history_mutex;
+    mutable std::shared_mutex history_mutex; // Uso de shared_mutex
+    
+    // FALTABA EN TU CÓDIGO ORIGINAL:
+    void cleanupStaleHistory();
     
     float calculateRapidFailureScore(const ClientHistory& history);
     float calculateEnumerationScore(const ClientHistory& history);
@@ -109,10 +108,11 @@ private:
 class AdaptiveThresholdManager {
 public:
     AdaptiveThresholdManager();
-    
     void updateThreshold(const std::string& metric, float new_threshold);
     float getThreshold(const std::string& metric) const;
     void reinforceThresholds(const AnomalyScore& anomaly);
+    
+    // FALTABA EN TU CÓDIGO ORIGINAL:
     void resetThresholds();
     
 private:
@@ -124,20 +124,18 @@ private:
 class RateLimitingPolicy {
 public:
     RateLimitingPolicy(uint32_t default_rps = 100);
-    
     bool checkLimit(const std::string& client_id);
     void enforceDynamicLimits(const AnomalyScore& anomaly);
+    
+    // FALTABA EN TU CÓDIGO ORIGINAL:
     void resetPolicies();
     
 private:
     struct ClientPolicy {
         uint32_t requests_per_second;
-        uint32_t burst_size;
         TimePoint last_reset;
         uint32_t request_count;
-        bool is_compromised;
     };
-    
     std::unordered_map<std::string, ClientPolicy> policies;
     uint32_t default_rps;
     std::mutex policy_mutex;
@@ -146,11 +144,13 @@ private:
 class ThreatResponseEngine {
 public:
     ThreatResponseEngine();
-    
     void respondToThreat(const AnomalyScore& anomaly);
     void isolateClient(const std::string& client_id, ThreatLevel level);
     void throttleClient(const std::string& client_id, float reduction_factor);
-    void rerouteTraffic(const std::string& client_id); // CORREGIDO: Quitado el espacio
+    
+    // FALTABA EN TU CÓDIGO ORIGINAL:
+    void rerouteTraffic(const std::string& client_id);
+    
     void generateAlert(const AnomalyScore& anomaly);
     
 private:
@@ -160,7 +160,6 @@ private:
         TimePoint isolation_start;
         std::string reason;
     };
-    
     std::vector<ClientIsolation> isolated_clients;
     std::mutex response_mutex;
 };
@@ -171,8 +170,13 @@ public:
     ~NanoSecurityMesh();
     
     void initialize();
-    void processRequest(const std::string& client_id, const BehaviorMetrics& metrics);
+    
+    // CRITICO: Devuelve bool para permitir bloquear el login
+    bool processRequest(const std::string& client_id, const BehaviorMetrics& metrics);
+    
     ThreatLevel getThreatLevel(const std::string& client_id);
+    
+    // FALTABAN EN TU CÓDIGO ORIGINAL:
     AnomalyScore getAnomalyScore(const std::string& client_id);
     void enforceDefense(const AnomalyScore& anomaly);
     

@@ -4,20 +4,21 @@ using System.Collections.Concurrent;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
-using System.Threading;
 using System.Threading.Tasks;
+using System.Net;
+using System.Net.Sockets;
+using Microsoft.Extensions.Caching.Memory; // Requiere NuGet: Microsoft.Extensions.Caching.Memory
 
 namespace WorkChain.Security.AccessControl
 {
-    /// <summary>
-    /// Zero Trust Access Control Engine for WorkChain ERP
-    /// Implements RBAC, ABAC, and attribute-based policies
-    /// </summary>
-    
+    // ---------------------------------------------------------
+    // Enums & Interfaces
+    // ---------------------------------------------------------
+
     public enum AccessDecision
     {
         Deny = 0,
-        Challenge = 1,
+        Challenge = 1,     // Requiere MFA o Step-up auth
         Permit = 2,
         PermitWithRestrictions = 3
     }
@@ -30,399 +31,383 @@ namespace WorkChain.Security.AccessControl
         Critical = 3
     }
 
-    public interface IAccessPolicy
+    /// <summary>
+    /// Interfaz para desacoplar el almacenamiento de logs (DB, File, SIEM)
+    /// </summary>
+    public interface IAuditLogger
     {
-        bool Evaluate(AccessContext context);
-        RiskLevel CalculateRiskLevel(AccessContext context);
+        Task LogAsync(AuditLog entry);
     }
+
+    // ---------------------------------------------------------
+    // Context & Entities
+    // ---------------------------------------------------------
 
     public class AccessContext
     {
         public string UserId { get; set; }
         public string ResourceId { get; set; }
+        public string ResourceTenantId { get; set; } // CRÍTICO: El tenant dueño del recurso
         public string Action { get; set; }
-        public string TenantId { get; set; }
-        public Dictionary<string, string> UserAttributes { get; set; }
-        public Dictionary<string, string> ResourceAttributes { get; set; }
-        public Dictionary<string, string> EnvironmentAttributes { get; set; }
-        public DateTime RequestTime { get; set; }
+        public string ContextTenantId { get; set; }  // El tenant donde ocurre la acción
+        
+        public Dictionary<string, string> Attributes { get; set; } = new Dictionary<string, string>();
+        public DateTime RequestTime { get; set; } = DateTime.UtcNow;
         public string IpAddress { get; set; }
         public string DeviceId { get; set; }
         public string SessionId { get; set; }
 
-        public AccessContext()
+        public bool IsValid()
         {
-            UserAttributes = new Dictionary<string, string>();
-            ResourceAttributes = new Dictionary<string, string>();
-            EnvironmentAttributes = new Dictionary<string, string>();
-            RequestTime = DateTime.UtcNow;
+            return !string.IsNullOrWhiteSpace(UserId) &&
+                   !string.IsNullOrWhiteSpace(ResourceId) &&
+                   !string.IsNullOrWhiteSpace(ContextTenantId);
         }
     }
 
     public class Role
     {
         public string Id { get; set; }
-        public string TenantId { get; set; }
+        public string TenantId { get; set; } // Role Scoping
         public string Name { get; set; }
-        public string Description { get; set; }
-        public List<Permission> Permissions { get; set; }
-        public List<string> DeniedActions { get; set; }
-        public DateTime CreatedAt { get; set; }
-        public DateTime ModifiedAt { get; set; }
-
-        public Role()
-        {
-            Permissions = new List<Permission>();
-            DeniedActions = new List<string>();
-        }
+        public List<Permission> Permissions { get; set; } = new List<Permission>();
+        public List<string> DeniedActions { get; set; } = new List<string>(); // Explicit Deny
     }
 
     public class Permission
     {
-        public string Id { get; set; }
-        public string Resource { get; set; }
+        public string ResourcePattern { get; set; } // Soporta "order:*"
         public string Action { get; set; }
-        public List<string> Scopes { get; set; }
-        public bool IsNegative { get; set; }
-        public Dictionary<string, string> Conditions { get; set; }
-
-        public Permission()
-        {
-            Scopes = new List<string>();
-            Conditions = new Dictionary<string, string>();
-        }
+        public bool IsNegative { get; set; } // Si es true, es una regla DENY explícita
+        public Dictionary<string, string> Conditions { get; set; } = new Dictionary<string, string>();
     }
 
-    public class AccessPolicy : IAccessPolicy
-    {
-        private readonly ConcurrentDictionary<string, Role> _roleCache;
-        private readonly ConcurrentDictionary<string, List<string>> _userRoleCache;
-        private readonly ConcurrentDictionary<string, PolicyRuleset> _policyCache;
-        private readonly object _lockObj = new object();
+    // ---------------------------------------------------------
+    // Core Logic: Access Policy Engine
+    // ---------------------------------------------------------
 
-        public AccessPolicy()
-        {
-            _roleCache = new ConcurrentDictionary<string, Role>();
-            _userRoleCache = new ConcurrentDictionary<string, List<string>>();
-            _policyCache = new ConcurrentDictionary<string, PolicyRuleset>();
-        }
+    public class AccessPolicy
+    {
+        // Almacenes thread-safe simulando DB en memoria
+        private readonly ConcurrentDictionary<string, Role> _roles = new ConcurrentDictionary<string, Role>();
+        
+        // Key: "TenantId:UserId", Value: List of RoleIds
+        private readonly ConcurrentDictionary<string, HashSet<string>> _userRoleMap = new ConcurrentDictionary<string, HashSet<string>>();
 
         public void RegisterRole(Role role)
         {
-            lock (_lockObj)
-            {
-                _roleCache.AddOrUpdate(role.Id, role, (key, old) => role);
-            }
+            _roles.AddOrUpdate(role.Id, role, (k, v) => role);
         }
 
         public void AssignRoleToUser(string userId, string roleId, string tenantId)
         {
-            lock (_lockObj)
+            // Verificamos que el rol pertenezca al tenant antes de asignar (Seguridad)
+            if (_roles.TryGetValue(roleId, out var role))
             {
-                var cacheKey = $"{tenantId}:{userId}";
-                _userRoleCache.AddOrUpdate(cacheKey, new List<string> { roleId }, (key, roles) =>
-                {
-                    if (!roles.Contains(roleId))
-                        roles.Add(roleId);
-                    return roles;
-                });
+                if (role.TenantId != tenantId && role.TenantId != "GLOBAL") 
+                    throw new InvalidOperationException("Cross-tenant role assignment attempt detected.");
             }
+
+            string key = $"{tenantId}:{userId}";
+            _userRoleMap.AddOrUpdate(key, 
+                new HashSet<string> { roleId }, 
+                (k, list) => { list.Add(roleId); return list; });
         }
 
-        public bool Evaluate(AccessContext context)
+        /// <summary>
+        /// Evaluación principal de políticas (Zero Trust)
+        /// </summary>
+        public bool Evaluate(AccessContext context, out string denyReason)
         {
-            if (context == null)
-                throw new ArgumentNullException(nameof(context));
+            denyReason = string.Empty;
 
-            /* Validate tenant isolation */
-            if (!ValidateTenantIsolation(context))
-                return false;
-
-            /* Check explicit deny rules first (fail-secure) */
-            if (CheckExplicitDeny(context))
-                return false;
-
-            /* Evaluate user roles and permissions */
-            var userRoles = GetUserRoles(context.UserId, context.TenantId);
-            if (!userRoles.Any())
-                return false;
-
-            /* Check if user has permission */
-            foreach (var roleId in userRoles)
+            // 1. Validación de Aislamiento de Inquilinos (Tenant Isolation)
+            if (context.ResourceTenantId != context.ContextTenantId)
             {
-                if (_roleCache.TryGetValue(roleId, out var role))
+                // Bloqueo duro: Un usuario en el contexto del Tenant A no puede tocar recursos del Tenant B
+                denyReason = "Cross-Tenant Resource Access Violation";
+                return false;
+            }
+
+            // 2. Obtener Roles del usuario EN ESTE TENANT ESPECÍFICO
+            string userKey = $"{context.ContextTenantId}:{context.UserId}";
+            if (!_userRoleMap.TryGetValue(userKey, out var roleIds) || roleIds.Count == 0)
+            {
+                denyReason = "User has no roles in this tenant";
+                return false;
+            }
+
+            // 3. Resolución de Roles y Permisos
+            var activeRoles = roleIds
+                .Select(rid => _roles.TryGetValue(rid, out var r) ? r : null)
+                .Where(r => r != null)
+                .ToList();
+
+            // 4. Check EXPLICIT DENY (Prioridad Máxima)
+            foreach (var role in activeRoles)
+            {
+                if (role.DeniedActions.Contains(context.Action) || role.Permissions.Any(p => p.IsNegative && MatchesPermission(p, context)))
                 {
-                    if (HasPermission(role, context))
-                        return true;
+                    denyReason = $"Explicit Deny in Role: {role.Name}";
+                    return false;
                 }
             }
 
-            return false;
-        }
-
-        public RiskLevel CalculateRiskLevel(AccessContext context)
-        {
-            var riskScore = 0;
-
-            /* Evaluate various risk factors */
-            riskScore += EvaluateLocationRisk(context);
-            riskScore += EvaluateDeviceRisk(context);
-            riskScore += EvaluateTimeRisk(context);
-            riskScore += EvaluateBehaviorRisk(context);
-
-            if (riskScore >= 75)
-                return RiskLevel.Critical;
-            else if (riskScore >= 50)
-                return RiskLevel.High;
-            else if (riskScore >= 25)
-                return RiskLevel.Medium;
-            else
-                return RiskLevel.Low;
-        }
-
-        private bool ValidateTenantIsolation(AccessContext context)
-        {
-            /* Ensure multi-tenant isolation */
-            if (string.IsNullOrEmpty(context.TenantId))
-                return false;
-
-            /* Query database to verify tenant ownership */
-            /* This is a placeholder - actual implementation would query the database */
-            return true;
-        }
-
-        private bool CheckExplicitDeny(AccessContext context)
-        {
-            var userRoles = GetUserRoles(context.UserId, context.TenantId);
-
-            foreach (var roleId in userRoles)
+            // 5. Check ALLOW (Permissive)
+            bool allowed = false;
+            foreach (var role in activeRoles)
             {
-                if (_roleCache.TryGetValue(roleId, out var role))
+                if (role.Permissions.Any(p => !p.IsNegative && MatchesPermission(p, context)))
                 {
-                    if (role.DeniedActions.Contains(context.Action))
-                        return true;
+                    allowed = true;
+                    break; // Encontró un permiso válido, pero seguimos buscando DENYs si la lógica fuera más compleja
                 }
             }
 
-            return false;
+            if (!allowed) denyReason = "No matching permission found (Implicit Deny)";
+            return allowed;
         }
 
-        private List<string> GetUserRoles(string userId, string tenantId)
+        private bool MatchesPermission(Permission p, AccessContext ctx)
         {
-            var cacheKey = $"{tenantId}:{userId}";
-            _userRoleCache.TryGetValue(cacheKey, out var roles);
-            return roles ?? new List<string>();
+            // Verificación de Recurso (soporta wildcards simples)
+            bool resourceMatch = p.ResourcePattern == "*" || p.ResourcePattern == ctx.ResourceId;
+            bool actionMatch = p.Action == "*" || p.Action == ctx.Action;
+
+            if (!resourceMatch || !actionMatch) return false;
+
+            // Evaluación de Condiciones Contextuales (ABAC)
+            return EvaluateConditions(p.Conditions, ctx);
         }
 
-        private bool HasPermission(Role role, AccessContext context)
+        private bool EvaluateConditions(Dictionary<string, string> conditions, AccessContext ctx)
         {
-            return role.Permissions.Any(p =>
-                p.Resource == context.ResourceId &&
-                p.Action == context.Action &&
-                !p.IsNegative &&
-                EvaluateConditions(p.Conditions, context)
-            );
-        }
+            if (conditions == null || conditions.Count == 0) return true;
 
-        private bool EvaluateConditions(Dictionary<string, string> conditions, AccessContext context)
-        {
-            foreach (var condition in conditions)
+            foreach (var kvp in conditions)
             {
-                switch (condition.Key)
+                switch (kvp.Key)
                 {
-                    case "ipRange":
-                        if (!IsIpInRange(context.IpAddress, condition.Value))
-                            return false;
+                    case "IpRange":
+                        if (!NetworkUtils.IsIpInRange(ctx.IpAddress, kvp.Value)) return false;
                         break;
-                    case "timeWindow":
-                        if (!IsInTimeWindow(context.RequestTime, condition.Value))
-                            return false;
+                    case "TimeWindow": // Formato "HH:mm-HH:mm"
+                        if (!TimeUtils.IsInWindow(ctx.RequestTime, kvp.Value)) return false;
                         break;
-                    case "deviceId":
-                        if (context.DeviceId != condition.Value)
-                            return false;
+                    case "DeviceId":
+                        if (ctx.DeviceId != kvp.Value) return false;
                         break;
                 }
             }
-
             return true;
         }
 
-        private bool IsIpInRange(string ip, string ipRange)
+        public RiskLevel CalculateRisk(AccessContext ctx)
         {
-            /* Implement IP range checking */
-            return true;
-        }
-
-        private bool IsInTimeWindow(DateTime time, string timeWindow)
-        {
-            /* Implement time window checking */
-            return true;
-        }
-
-        private int EvaluateLocationRisk(AccessContext context)
-        {
-            /* Evaluate geographic risk */
-            return 10;
-        }
-
-        private int EvaluateDeviceRisk(AccessContext context)
-        {
-            /* Evaluate device risk */
-            return 5;
-        }
-
-        private int EvaluateTimeRisk(AccessContext context)
-        {
-            /* Evaluate time-based anomalies */
-            return 0;
-        }
-
-        private int EvaluateBehaviorRisk(AccessContext context)
-        {
-            /* Evaluate behavioral risk */
-            return 0;
+            int score = 0;
+            
+            // Ejemplo de heurística de riesgo
+            if (string.IsNullOrEmpty(ctx.DeviceId)) score += 20; // Dispositivo desconocido
+            if (ctx.RequestTime.Hour < 6 || ctx.RequestTime.Hour > 22) score += 10; // Horario inusual
+            
+            // En un entorno real, aquí consultaríamos ThreatIntel o historial de comportamiento
+            
+            if (score >= 50) return RiskLevel.High;
+            if (score >= 20) return RiskLevel.Medium;
+            return RiskLevel.Low;
         }
     }
 
-    public class PolicyRuleset
-    {
-        public string Id { get; set; }
-        public string TenantId { get; set; }
-        public List<PolicyRule> Rules { get; set; }
-        public int Priority { get; set; }
-
-        public PolicyRuleset()
-        {
-            Rules = new List<PolicyRule>();
-        }
-    }
-
-    public class PolicyRule
-    {
-        public string Effect { get; set; } /* Allow or Deny */
-        public List<string> Principals { get; set; }
-        public List<string> Actions { get; set; }
-        public List<string> Resources { get; set; }
-        public Dictionary<string, object> Conditions { get; set; }
-
-        public PolicyRule()
-        {
-            Principals = new List<string>();
-            Actions = new List<string>();
-            Resources = new List<string>();
-            Conditions = new Dictionary<string, object>();
-        }
-    }
+    // ---------------------------------------------------------
+    // Main Engine: Access Control Engine
+    // ---------------------------------------------------------
 
     public class AccessControlEngine
     {
-        private readonly AccessPolicy _accessPolicy;
-        private readonly ConcurrentDictionary<string, AccessDecision> _decisionCache;
-        private readonly ConcurrentDictionary<string, AuditLog> _auditLog;
-        private readonly Timer _cacheExpiryTimer;
+        private readonly AccessPolicy _policy;
+        private readonly IMemoryCache _decisionCache;
+        private readonly IAuditLogger _auditLogger;
 
-        public AccessControlEngine()
+        public AccessControlEngine(IMemoryCache cache, IAuditLogger logger)
         {
-            _accessPolicy = new AccessPolicy();
-            _decisionCache = new ConcurrentDictionary<string, AccessDecision>();
-            _auditLog = new ConcurrentDictionary<string, AuditLog>();
-            _cacheExpiryTimer = new Timer(ExpireCache, null, TimeSpan.FromMinutes(5), TimeSpan.FromMinutes(5));
+            _policy = new AccessPolicy();
+            _decisionCache = cache ?? throw new ArgumentNullException(nameof(cache));
+            _auditLogger = logger ?? throw new ArgumentNullException(nameof(logger));
         }
 
-        public AccessDecision Evaluate(AccessContext context)
-        {
-            var cacheKey = GenerateCacheKey(context);
+        // Métodos proxy para configurar políticas
+        public void ConfigureRole(Role role) => _policy.RegisterRole(role);
+        public void AssignUser(string user, string role, string tenant) => _policy.AssignRoleToUser(user, role, tenant);
 
-            /* Check cache first */
-            if (_decisionCache.TryGetValue(cacheKey, out var cachedDecision))
+        public async Task<AccessDecision> EvaluateAsync(AccessContext context)
+        {
+            if (!context.IsValid()) return AccessDecision.Deny;
+
+            // Generar clave de caché determinista
+            string cacheKey = ComputeCacheKey(context);
+
+            // 1. Consultar Caché (Fast Path)
+            if (_decisionCache.TryGetValue(cacheKey, out AccessDecision cachedDecision))
             {
-                LogAccess(context, cachedDecision, true);
+                // Loguear acceso cacheado (puede ser sampling para no saturar I/O)
+                await LogAsync(context, cachedDecision, "CacheHit");
                 return cachedDecision;
             }
 
-            /* Evaluate policy */
-            var decision = _accessPolicy.Evaluate(context) ? AccessDecision.Permit : AccessDecision.Deny;
-            var riskLevel = _accessPolicy.CalculateRiskLevel(context);
+            // 2. Evaluar Políticas (Deep Path)
+            bool isAllowed = _policy.Evaluate(context, out string denyReason);
+            RiskLevel risk = _policy.CalculateRisk(context);
 
-            /* Adjust decision based on risk */
-            if (riskLevel == RiskLevel.Critical)
+            AccessDecision decision;
+
+            // 3. Matriz de Decisión basada en Riesgo
+            if (!isAllowed)
             {
                 decision = AccessDecision.Deny;
             }
-            else if (riskLevel == RiskLevel.High)
+            else if (risk == RiskLevel.High || risk == RiskLevel.Critical)
             {
+                // Aunque tenga permiso, el riesgo es alto -> Challenge (MFA)
                 decision = AccessDecision.Challenge;
             }
-            else if (riskLevel == RiskLevel.Medium && decision == AccessDecision.Permit)
+            else if (risk == RiskLevel.Medium)
             {
                 decision = AccessDecision.PermitWithRestrictions;
             }
+            else
+            {
+                decision = AccessDecision.Permit;
+            }
 
-            /* Cache decision */
-            _decisionCache.TryAdd(cacheKey, decision);
+            // 4. Guardar en Caché (TTL corto para seguridad dinámica)
+            var cacheOptions = new MemoryCacheEntryOptions()
+                .SetAbsoluteExpiration(TimeSpan.FromMinutes(5)) // TTL base
+                .SetSlidingExpiration(TimeSpan.FromMinutes(2))  // Si se usa, se mantiene
+                .SetSize(1); // Para limitar tamaño total de caché si se configura
 
-            /* Log access */
-            LogAccess(context, decision, false);
+            _decisionCache.Set(cacheKey, decision, cacheOptions);
+
+            // 5. Auditoría
+            await LogAsync(context, decision, string.IsNullOrEmpty(denyReason) ? "PolicyEval" : denyReason);
 
             return decision;
         }
 
-        private string GenerateCacheKey(AccessContext context)
+        private string ComputeCacheKey(AccessContext ctx)
         {
-            var key = $"{context.TenantId}:{context.UserId}:{context.ResourceId}:{context.Action}";
+            // Usamos Hash para clave compacta
+            string rawKey = $"{ctx.ContextTenantId}|{ctx.UserId}|{ctx.ResourceId}|{ctx.Action}|{ctx.IpAddress}";
             using (var sha = SHA256.Create())
             {
-                var hash = sha.ComputeHash(Encoding.UTF8.GetBytes(key));
-                return Convert.ToBase64String(hash);
+                byte[] bytes = sha.ComputeHash(Encoding.UTF8.GetBytes(rawKey));
+                return Convert.ToBase64String(bytes);
             }
         }
 
-        private void LogAccess(AccessContext context, AccessDecision decision, bool cached)
+        private async Task LogAsync(AccessContext ctx, AccessDecision decision, string reason)
         {
-            var auditEntry = new AuditLog
+            var log = new AuditLog
             {
                 Id = Guid.NewGuid().ToString(),
-                TenantId = context.TenantId,
-                UserId = context.UserId,
-                ResourceId = context.ResourceId,
-                Action = context.Action,
-                Decision = decision.ToString(),
-                IpAddress = context.IpAddress,
-                DeviceId = context.DeviceId,
                 Timestamp = DateTime.UtcNow,
-                Cached = cached
+                TenantId = ctx.ContextTenantId,
+                UserId = ctx.UserId,
+                Action = ctx.Action,
+                Resource = ctx.ResourceId,
+                Decision = decision.ToString(),
+                Reason = reason,
+                IpAddress = ctx.IpAddress
             };
-
-            _auditLog.TryAdd(auditEntry.Id, auditEntry);
+            await _auditLogger.LogAsync(log);
         }
+    }
 
-        private void ExpireCache(object state)
+    // ---------------------------------------------------------
+    // Utilities & Helpers (Network & Time)
+    // ---------------------------------------------------------
+
+    public static class NetworkUtils
+    {
+        public static bool IsIpInRange(string ipAddress, string cidrRange)
         {
-            /* Implement cache expiry logic */
-            if (_decisionCache.Count > 10000)
+            if (string.IsNullOrEmpty(ipAddress) || string.IsNullOrEmpty(cidrRange)) return false;
+
+            try
             {
-                _decisionCache.Clear();
+                string[] parts = cidrRange.Split('/');
+                if (parts.Length != 2) return ipAddress == cidrRange; // Comparación simple si no es CIDR
+
+                IPAddress ip = IPAddress.Parse(ipAddress);
+                IPAddress baseIp = IPAddress.Parse(parts[0]);
+                int bits = int.Parse(parts[1]);
+
+                return IsInSubnet(ip, baseIp, bits);
+            }
+            catch
+            {
+                return false; // Fail secure on parse error
             }
         }
 
-        public IEnumerable<AuditLog> GetAuditLog(string tenantId)
+        private static bool IsInSubnet(IPAddress address, IPAddress subnet, int maskLength)
         {
-            return _auditLog.Values.Where(log => log.TenantId == tenantId);
+            // Implementación robusta de comprobación de bits IP
+            // Nota: Para producción, usar librerías como IPNetwork2 para soporte IPv6 completo
+            byte[] ipBytes = address.GetAddressBytes();
+            byte[] subnetBytes = subnet.GetAddressBytes();
+
+            if (ipBytes.Length != subnetBytes.Length) return false;
+
+            // Check full bytes
+            int byteCount = maskLength / 8;
+            for (int i = 0; i < byteCount; i++)
+            {
+                if (ipBytes[i] != subnetBytes[i]) return false;
+            }
+
+            // Check remaining bits
+            int remainder = maskLength % 8;
+            if (remainder > 0)
+            {
+                byte mask = (byte)(0xFF << (8 - remainder));
+                if ((ipBytes[byteCount] & mask) != (subnetBytes[byteCount] & mask)) return false;
+            }
+
+            return true;
+        }
+    }
+
+    public static class TimeUtils
+    {
+        public static bool IsInWindow(DateTime requestTime, string window)
+        {
+            try
+            {
+                // Formato esperado: "09:00-17:00"
+                var parts = window.Split('-');
+                var start = TimeSpan.Parse(parts[0]);
+                var end = TimeSpan.Parse(parts[1]);
+                var now = requestTime.TimeOfDay;
+
+                return now >= start && now <= end;
+            }
+            catch
+            {
+                return false; // Fail secure
+            }
         }
     }
 
     public class AuditLog
     {
         public string Id { get; set; }
+        public DateTime Timestamp { get; set; }
         public string TenantId { get; set; }
         public string UserId { get; set; }
-        public string ResourceId { get; set; }
         public string Action { get; set; }
+        public string Resource { get; set; }
         public string Decision { get; set; }
+        public string Reason { get; set; }
         public string IpAddress { get; set; }
-        public string DeviceId { get; set; }
-        public DateTime Timestamp { get; set; }
-        public bool Cached { get; set; }
     }
 }

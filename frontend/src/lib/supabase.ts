@@ -1,38 +1,82 @@
 import { createClient } from '@supabase/supabase-js';
 
 /**
- * AUDITORIA CRITICA CORREGIDA:
- * El problema era que no había cliente de Supabase instanciado.
- * AlpineJS no podía acceder a los datos porque faltaba la conexión.
- * 
- * SOLUCION:
- * - Validamos que las variables de entorno sean accesibles (PUBLIC_*)
- * - Creamos la instancia del cliente una sola vez
- * - Exponemos funciones tipadas para consultar tenants
+ * src/lib/supabase.ts
+ * Cliente Supabase para Kaze-Quantum ERP
+ * * MEJORAS DE SEGURIDAD APLICADAS:
+ * - Tipado estricto (Interfaces) para evitar errores de mapeo.
+ * - Nueva función `getTenantByDomain` para soportar la estrategia de subdominios.
+ * - Protección contra Tenant Enumeration (Advertencia en getTenants).
  */
 
-// Validar que las variables de entorno existan
+// --- Tipos e Interfaces ---
+
+export interface TenantPublicInfo {
+  id: string;
+  name: string;
+  domain?: string;
+  logo_url?: string;
+}
+
+// --- Inicialización del Cliente ---
+
 const supabaseUrl = import.meta.env.PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('[Supabase] Missing environment variables:');
-  console.error('  - PUBLIC_SUPABASE_URL:', supabaseUrl ? '✓' : '✗ MISSING');
-  console.error('  - PUBLIC_SUPABASE_ANON_KEY:', supabaseAnonKey ? '✓' : '✗ MISSING');
+  console.error('[Supabase] CRITICAL: Missing environment variables.');
   throw new Error('Supabase credentials not configured in environment');
 }
 
-// Crear cliente de Supabase (instancia única)
-export const supabase = createClient(supabaseUrl, supabaseAnonKey);
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true, // Mantiene la sesión si usas Auth de Supabase
+    autoRefreshToken: true,
+  }
+});
+
+// --- Funciones de Datos ---
 
 /**
- * Obtiene la lista de organizaciones (tenants) activos desde Supabase
- * SEGURIDAD: Filtra solo registros activos (is_active = true)
- * 
- * @returns Array de organizaciones con id y name
+ * CRÍTICO PARA EL LOGIN POR SUBDOMINIO:
+ * Busca un tenant específico basado en el dominio/subdominio de la URL.
+ * Esto asegura que el login se filtre automáticamente sin que el usuario elija de una lista.
+ * * @param domain El dominio actual (ej: demo.workchain-erp.onrender.com)
  */
-export async function getTenants(): Promise<Array<{ id: string; name: string }>> {
-  console.log('[Supabase] Fetching active tenants from PostgreSQL...');
+export async function getTenantByDomain(domain: string): Promise<TenantPublicInfo | null> {
+  try {
+    const { data, error } = await supabase
+      .from('tenants')
+      .select('id, name, domain')
+      .eq('domain', domain) // Filtro estricto por dominio
+      .eq('is_active', true)
+      .single();
+
+    if (error || !data) {
+      console.warn(`[Supabase] No tenant found for domain: ${domain}`);
+      return null;
+    }
+
+    return {
+      id: String(data.id),
+      name: data.name,
+      domain: data.domain
+    };
+  } catch (err) {
+    console.error('[Supabase] Error resolving tenant by domain:', err);
+    return null;
+  }
+}
+
+/**
+ * Obtiene la lista de organizaciones activas.
+ * ⚠️ ADVERTENCIA DE SEGURIDAD:
+ * Esta función expone la lista de clientes. En producción con "Subdomain Strategy",
+ * deberías evitar usarla en el login público para prevenir enumeración.
+ * Úsala solo si necesitas un selector manual de empresas.
+ */
+export async function getTenants(): Promise<TenantPublicInfo[]> {
+  // console.log('[Supabase] Fetching active tenants list...'); 
 
   try {
     const { data, error } = await supabase
@@ -46,26 +90,24 @@ export async function getTenants(): Promise<Array<{ id: string; name: string }>>
       throw new Error(`Failed to load tenants: ${error.message}`);
     }
 
-    console.log('[Supabase] Tenants loaded successfully:', data?.length ?? 0);
-    
-    // Asegura tipos correctos (string IDs, no números)
-    return data?.map((tenant: any) => ({
+    return (data ?? []).map((tenant) => ({
       id: String(tenant.id),
       name: tenant.name,
-    })) ?? [];
+    }));
   } catch (err) {
-    const errorMsg = err instanceof Error ? err.message : String(err);
-    console.error('[Supabase] Connection error:', errorMsg);
-    throw err;
+    console.error('[Supabase] Connection error:', err);
+    return []; // Fail-safe: retorna array vacío en vez de romper la UI
   }
 }
 
 /**
- * Valida que una organización exista y esté activa
- * SEGURIDAD: Verifica permisos antes de login
+ * Valida que una organización exista y esté activa por ID.
  */
 export async function validateTenant(tenantId: string): Promise<boolean> {
   try {
+    // Validación básica de formato UUID para evitar llamadas innecesarias a la BD
+    if (!tenantId || tenantId.length < 10) return false;
+
     const { data, error } = await supabase
       .from('tenants')
       .select('id')
@@ -74,7 +116,6 @@ export async function validateTenant(tenantId: string): Promise<boolean> {
       .single();
 
     if (error || !data) {
-      console.warn('[Supabase] Tenant validation failed:', tenantId);
       return false;
     }
 
@@ -86,25 +127,21 @@ export async function validateTenant(tenantId: string): Promise<boolean> {
 }
 
 /**
- * Verifica el estado de la conexión a Supabase
- * Útil para debugging
+ * Health Check de Supabase
  */
 export async function checkConnection(): Promise<boolean> {
   try {
     const { error } = await supabase
       .from('tenants')
-      .select('count')
+      .select('count', { count: 'exact', head: true }) // Query más ligera posible (HEAD)
       .limit(1);
 
     if (error) {
-      console.error('[Supabase] Connection check failed:', error.message);
+      console.error('[Supabase] Health check failed:', error.message);
       return false;
     }
-
-    console.log('[Supabase] Connection OK');
     return true;
   } catch (err) {
-    console.error('[Supabase] Connection check exception:', err);
     return false;
   }
 }

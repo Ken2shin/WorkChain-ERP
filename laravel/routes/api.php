@@ -2,92 +2,98 @@
 
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\AuthController;
-use App\Http\Controllers\Api\TenantController;
+use Illuminate\Http\Request;
 
 /*
 |--------------------------------------------------------------------------
-| API Routes
+| API Routes Configuration
 |--------------------------------------------------------------------------
-| All routes use environment variables for configuration
-| NO hardcoded URLs or API endpoints in this file
-|
-| API versioning comes from config: api-security.versioning
+| Arquitectura: Multi-Tenant por Subdominio.
+| Todas las rutas aquí asumen que el middleware 'IdentifyTenant' ya se ejecutó
+| (configurado en bootstrap/app.php) y el contexto de la organización existe.
 */
 
-// Get API version from config (driven by environment variables)
-$apiVersion = config('api-security.versioning.current_version', 'v1');
-$apiPrefix = config('api-security.versioning.prefix', '/api/v') . $apiVersion;
+// Versión de la API (Hardcoded o config, pero simple es mejor para mantener)
+$v1 = 'v1';
 
-Route::prefix($apiVersion)->middleware(['api', 'secure-api'])->group(function () {
-    // Public routes (no authentication required)
-    // Tenants endpoint - needed for login dropdown (public, no auth required)
-    Route::get('/tenants', [TenantController::class, 'index'])->name('tenants.index');
+Route::prefix($v1)->group(function () {
+
+    /*
+    |--------------------------------------------------------------------------
+    | 🔓 RUTAS PÚBLICAS (Contexto Tenant)
+    |--------------------------------------------------------------------------
+    | Rutas accesibles sin token, pero protegidas por WAF y Rate Limiting.
+    */
     
-    // Auth routes
-    Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
-    Route::post('/auth/register', [AuthController::class, 'register'])->name('auth.register');
-    Route::post('/auth/refresh', [AuthController::class, 'refresh'])->name('auth.refresh');
+    // 1. LOGIN & AUTENTICACIÓN
+    // Aplicamos 'throttle:login_attempts' (definido en config/security.php)
+    // para evitar fuerza bruta extrema.
+    Route::middleware(['throttle:rate_limiting.limits.login_attempts'])->group(function () {
+        
+        // El Login recibe el contexto del Tenant automáticamente por el subdominio.
+        // No hace falta pasar 'tenant_id' en el body, el middleware lo inyecta.
+        Route::post('/auth/login', [AuthController::class, 'login'])->name('auth.login');
+        
+        // Refresh token (útil si el access token expiró)
+        Route::post('/auth/refresh', [AuthController::class, 'refresh'])->name('auth.refresh');
+        
+        // Recuperación de contraseña
+        Route::post('/auth/forgot-password', [AuthController::class, 'forgotPassword'])->name('auth.forgot');
+    });
 
-    // Protected routes (require JWT authentication)
-    Route::middleware('auth:jwt')->group(function () {
-        // Auth endpoints
+    /*
+    |--------------------------------------------------------------------------
+    | 🔒 RUTAS PROTEGIDAS (Requieren JWT válido)
+    |--------------------------------------------------------------------------
+    | Aquí reside la lógica del ERP. El usuario ya está autenticado y
+    | vinculado a su organización.
+    */
+    Route::middleware(['auth:api', 'throttle:rate_limiting.limits.api'])->group(function () {
+        
+        // Perfil y Logout
         Route::get('/auth/me', [AuthController::class, 'me'])->name('auth.me');
         Route::post('/auth/logout', [AuthController::class, 'logout'])->name('auth.logout');
 
-        // Aquí irán los controladores de cada módulo
-        // Inventario
+        // ==========================================
+        // MÓDULOS DEL ERP (Descomentar al implementar)
+        // ==========================================
+        
+        // Inventario & Almacenes
         // Route::apiResource('products', ProductController::class);
         // Route::apiResource('warehouses', WarehouseController::class);
-        // Route::apiResource('inventory', InventoryController::class);
+        // Route::get('inventory/movements', [InventoryController::class, 'movements']);
 
-        // Ventas
+        // Ventas & CRM
         // Route::apiResource('customers', CustomerController::class);
         // Route::apiResource('sales-orders', SalesOrderController::class);
-        // Route::apiResource('invoices', InvoiceController::class);
-
-        // Compras
-        // Route::apiResource('suppliers', SupplierController::class);
-        // Route::apiResource('purchase-orders', PurchaseOrderController::class);
-
+        
         // RRHH
         // Route::apiResource('employees', EmployeeController::class);
-        // Route::apiResource('departments', DepartmentController::class);
-
-        // Proyectos
-        // Route::apiResource('projects', ProjectController::class);
-        // Route::apiResource('tasks', TaskController::class);
-
-        // Logística
-        // Route::apiResource('shipments', ShipmentController::class);
-        // Route::apiResource('vehicles', VehicleController::class);
-
-        // Finanzas
-        // Route::apiResource('invoices-paid', InvoicePaidController::class);
-        // Route::apiResource('expenses', ExpenseController::class);
-
-        // Documentos
-        // Route::apiResource('documents', DocumentController::class);
     });
 });
 
-// Health checks
+/*
+|--------------------------------------------------------------------------
+| 🏥 HEALTH CHECKS & MONITORING
+|--------------------------------------------------------------------------
+| Endpoints para Render/Kubernetes. NO exponen versiones específicas.
+*/
+
 Route::get('/health', function () {
+    // Respuesta JSON ligera para el Load Balancer
     return response()->json([
-        'status' => 'OK',
+        'status' => 'healthy',
         'timestamp' => now()->toIso8601String(),
-        'service' => 'WorkChain ERP API',
-        'version' => app()->version(),
-    ]);
+        'environment' => app()->environment(),
+    ], 200);
 });
 
-// Status endpoint
-Route::get('/status', function () {
-    return response()->json([
-        'status' => 'running',
-        'service' => 'ERP API',
-        'timestamp' => now()->toIso8601String(),
-        'version' => '1.0.0',
-        'php_version' => PHP_VERSION,
-        'laravel_version' => app()->version(),
-    ]);
+// Endpoint seguro para verificar conexión a BD (útil para debugging interno)
+Route::get('/up', function () {
+    try {
+        \Illuminate\Support\Facades\DB::connection()->getPdo();
+        return response()->json(['db' => 'connected', 'status' => 'up']);
+    } catch (\Exception $e) {
+        return response()->json(['db' => 'disconnected', 'status' => 'down'], 503);
+    }
 });

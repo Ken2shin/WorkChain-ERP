@@ -2,7 +2,12 @@ use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use chrono::{DateTime, Utc};
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Hash)]
+// ==========================================
+// ENUMS
+// ==========================================
+
+// MEJORA: Agregamos PartialOrd y Ord para poder comparar niveles (ej: High > Low)
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, Hash, PartialOrd, Ord)]
 pub enum ThreatLevel {
     Safe = 0,
     Low = 1,
@@ -24,8 +29,14 @@ pub enum BehaviorPattern {
     CredentialSpray,
 }
 
+// ==========================================
+// ESTRUCTURAS DE DATOS (DATA MODELS)
+// ==========================================
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct BehaviorEvent {
+    // CRITICO: tenant_id agregado para el filtrado correcto en el login
+    pub tenant_id: String, 
     pub client_id: String,
     pub timestamp: DateTime<Utc>,
     pub pattern: BehaviorPattern,
@@ -36,6 +47,8 @@ pub struct BehaviorEvent {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AnomalyScore {
+    // CRITICO: tenant_id agregado para saber a qué organización reportar la anomalía
+    pub tenant_id: String,
     pub client_id: String,
     pub score: f64,
     pub level: ThreatLevel,
@@ -46,7 +59,10 @@ pub struct AnomalyScore {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClientProfile {
+    // CRITICO: tenant_id agregado. Un perfil es único por (Tenant + Usuario)
+    pub tenant_id: String,
     pub client_id: String,
+    
     pub first_seen: DateTime<Utc>,
     pub last_seen: DateTime<Utc>,
     pub total_events: u64,
@@ -54,6 +70,8 @@ pub struct ClientProfile {
     pub risk_score: f64,
     pub is_compromised: bool,
     pub device_id: String,
+    
+    // Nota: La lógica debe limitar el tamaño de este vector para evitar DoS de memoria
     pub location_history: Vec<String>,
 }
 

@@ -6,86 +6,113 @@ use App\Models\Tenant;
 use App\Models\User;
 use Illuminate\Database\Seeder;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\DB;
 
 class DatabaseSeeder extends Seeder
 {
     public function run(): void
     {
-        // Crear tenant de demostración
-        $tenant = Tenant::firstOrCreate(
-            ['slug' => 'demo'],
-            [
-                'name' => 'Demo Company',
-                'domain' => 'demo.localhost',
-                'database_name' => 'tenant_demo',
-                'is_active' => true,
-                'metadata' => [
-                    'industry' => 'retail',
-                    'employees' => 50,
-                    'country' => 'ES',
-                ],
-            ]
-        );
+        // 1. CONFIGURACIÓN ESTRICTA DE PRODUCCIÓN
+        // Eliminamos detección automática. Forzamos el dominio de Render.
+        $productionHost = 'workchain-erp.onrender.com';
+        
+        // Subdominio para la organización demo: demo.workchain-erp.onrender.com
+        $demoDomain = 'demo.' . $productionHost;
 
-        // Crear usuario administrador
-        User::firstOrCreate(
-            ['email' => 'admin@demo.local'],
-            [
-                'tenant_id' => $tenant->id,
-                'name' => 'Administrador',
-                'password' => Hash::make('Admin123!@#'),
-                'role' => 'admin',
-                'is_active' => true,
-                'email_verified_at' => now(),
-                'permissions' => ['*'],
-            ]
-        );
+        $this->command->warn("🚨 PRODUCTION SEEDING MODE (Target: Supabase/Render)");
+        $this->command->info("🏢 Target Tenant Domain: $demoDomain");
 
-        // Crear usuario gerente
-        User::firstOrCreate(
-            ['email' => 'manager@demo.local'],
-            [
-                'tenant_id' => $tenant->id,
-                'name' => 'Gerente de Ventas',
-                'password' => Hash::make('Manager123!@#'),
-                'role' => 'manager',
-                'is_active' => true,
-                'email_verified_at' => now(),
-                'permissions' => [
-                    'view_reports',
-                    'manage_users',
-                    'manage_departments',
-                    'approve_expenses',
-                    'manage_projects'
-                ],
-            ]
-        );
+        DB::transaction(function () use ($demoDomain) {
+            
+            // 2. CREAR TENANT (ORGANIZACIÓN)
+            // Usamos firstOrCreate para evitar duplicados en Supabase.
+            $tenant = Tenant::withoutGlobalScopes()->firstOrCreate(
+                ['domain' => $demoDomain], 
+                [
+                    'name' => 'WorkChain Corp Global',
+                    'slug' => 'demo',
+                    'database_name' => 'tenant_demo', 
+                    'is_active' => true,
+                    'plan_type' => 'enterprise',
+                    'subscription_expires_at' => now()->addYears(5), 
+                    'metadata' => [
+                        'industry' => 'logistics',
+                        'country' => 'NI',
+                        'timezone' => 'America/Managua',
+                    ],
+                ]
+            );
 
-        // Crear usuario regular
-        User::firstOrCreate(
-            ['email' => 'user@demo.local'],
-            [
-                'tenant_id' => $tenant->id,
-                'name' => 'Usuario Estándar',
-                'password' => Hash::make('User123!@#'),
-                'role' => 'user',
-                'is_active' => true,
-                'email_verified_at' => now(),
-                'permissions' => [
-                    'view_own_data',
-                    'submit_expense',
-                    'view_projects',
-                    'submit_timesheet'
-                ],
-            ]
-        );
+            // Contraseña Maestra Segura
+            $securePassword = Hash::make('WorkChain2026!');
 
-        $this->command->info('✓ Database seeded successfully!');
+            // 3. CREAR USUARIOS
+            // Usamos withoutGlobalScopes para que el seeder pueda ver y crear usuarios
+            // sin que el filtro de seguridad (que espera una petición HTTP) bloquee la inserción.
+
+            // A. Admin de la Empresa (Roberto)
+            User::withoutGlobalScopes()->firstOrCreate(
+                ['email' => 'admin@demo.com'],
+                [
+                    'tenant_id' => $tenant->id,
+                    'name' => 'Roberto Director',
+                    'password' => $securePassword,
+                    'role' => 'tenant_admin', // Acceso total a la organización
+                    'is_active' => true,
+                    'email_verified_at' => now(),
+                    'permissions' => ['*'], 
+                ]
+            );
+
+            // B. Gerente (Luci)
+            User::withoutGlobalScopes()->firstOrCreate(
+                ['email' => 'manager@demo.com'],
+                [
+                    'tenant_id' => $tenant->id,
+                    'name' => 'Luci Gerente',
+                    'password' => $securePassword,
+                    'role' => 'manager', // Gestión de recursos
+                    'is_active' => true,
+                    'email_verified_at' => now(),
+                    'permissions' => [
+                        'view_reports',
+                        'manage_users',
+                        'approve_expenses',
+                        'manage_inventory',
+                    ],
+                ]
+            );
+
+            // C. Operador (Emanuel)
+            User::withoutGlobalScopes()->firstOrCreate(
+                ['email' => 'operador@demo.com'],
+                [
+                    'tenant_id' => $tenant->id,
+                    'name' => 'Emanuel Operador',
+                    'password' => $securePassword,
+                    'role' => 'user', // Operativo estándar
+                    'is_active' => true,
+                    'email_verified_at' => now(),
+                    'permissions' => [
+                        'view_own_data',
+                        'submit_timesheet',
+                        'view_inventory',
+                    ],
+                ]
+            );
+        });
+
+        // 4. SALIDA DE CONFIRMACIÓN
+        $this->command->info('✓ Datos de producción insertados correctamente en Supabase.');
         $this->command->line('');
-        $this->command->line('Login credentials:');
-        $this->command->line('─────────────────────');
-        $this->command->line('Email:    admin@demo.local');
-        $this->command->line('Password: Admin123!@#');
-        $this->command->line('Tenant:   Demo Company (demo)');
+        $this->command->line('──────────────────────────────────────────────────');
+        $this->command->line('🌍 LOGIN URL:    https://' . $demoDomain . '/login');
+        $this->command->line('──────────────────────────────────────────────────');
+        $this->command->line('👤 Admin:        admin@demo.com');
+        $this->command->line('👤 Manager:      manager@demo.com');
+        $this->command->line('👤 User:         operador@demo.com');
+        $this->command->line('🔑 Password:     WorkChain2026!');
+        $this->command->line('──────────────────────────────────────────────────');
+        $this->command->warn('⚠️  IMPORTANTE: Debes acceder usando el subdominio "demo."');
     }
 }

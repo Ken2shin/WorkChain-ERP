@@ -1,9 +1,10 @@
 /**
  * src/lib/alpine-store.ts
  * Alpine.js Global Store - Kaze-Quantum ERP (Secure Edition)
- * * CAMBIOS APLICADOS:
- * - Tipado estricto para evitar errores TS(7006) y TS(2304).
- * - Arquitectura Zero-Storage (Solo RAM + Cookies).
+ * * MEJORAS DE SEGURIDAD:
+ * - Inyección automática de X-Tenant-ID en todas las peticiones (Vital para filtrado).
+ * - Tipado estricto para evitar errores de compilación.
+ * - Manejo robusto de errores de red y sesión.
  */
 
 import type { Alpine } from 'alpinejs';
@@ -28,11 +29,21 @@ export interface UserProfile {
   name: string;
   email: string;
   role: string;
-  tenant_id: string;
+  tenant_id: string; // CRÍTICO: Este ID define el aislamiento de datos
   avatar_url?: string;
+  permissions?: string[];
 }
 
-// Interfaz pública del Store para usar en otros archivos
+export interface SecurityDiagnostics {
+  timestamp: string;
+  status: ConnectionStatus;
+  secureStorage: string;
+  cookiesDetected: boolean;
+  tls: boolean;
+  currentTenantHeader: string | null;
+}
+
+// Definición estricta del Store
 export interface AppStore {
   loading: boolean;
   authenticated: boolean;
@@ -46,6 +57,8 @@ export interface AppStore {
     tlsVerified: boolean;
     corsAllowed: boolean;
   };
+  
+  // Métodos
   init: () => Promise<void>;
   checkSession: () => Promise<void>;
   addToast: (msg: string, type?: Toast['type'], duration?: number) => string;
@@ -55,27 +68,23 @@ export interface AppStore {
   logout: () => Promise<void>;
   checkSupabaseConnection: () => Promise<boolean>;
   checkBackendConnection: () => Promise<boolean>;
-  getDiagnostics: () => any;
+  getDiagnostics: () => SecurityDiagnostics;
 }
 
 // --- Funciones de Utilidad (API Client Seguro) ---
 
-/**
- * Obtiene la URL base de la API
- * Exportada para ser usada en login.astro
- */
 export function getApiBaseUrl(): string {
-  const baseUrl = import.meta.env.PUBLIC_API_BASE;
+  // Aseguramos que no sea undefined y quitamos slash final
+  const baseUrl = import.meta.env.PUBLIC_API_BASE || '';
   if (!baseUrl) {
-    console.error('[SecOps] CRÍTICO: PUBLIC_API_BASE no configurada.');
-    return '';
+    console.warn('[SecOps] ADVERTENCIA: PUBLIC_API_BASE no está definido en .env');
   }
   return baseUrl.replace(/\/$/, '');
 }
 
 /**
  * Cliente HTTP Seguro (Zero-Token-Leakage)
- * Exportada para uso global
+ * CORRECCIÓN CRÍTICA: Inyecta el X-Tenant-ID dinámicamente.
  */
 export async function fetchApi(
   endpoint: string,
@@ -84,13 +93,28 @@ export async function fetchApi(
   const baseUrl = getApiBaseUrl();
   const url = `${baseUrl}${endpoint.startsWith('/') ? endpoint : '/' + endpoint}`;
 
-  // Configuración de seguridad para Cookies HttpOnly
+  // 1. Obtener el Tenant ID del Store de Alpine (si existe)
+  // Esto es vital para asegurar que el Backend filtre los datos correctamente
+  // incluso si la cookie de sesión es ambigua.
+  let tenantHeader: Record<string, string> = {};
+  
+  // Acceso seguro al objeto global Alpine (solo en navegador)
+  if (typeof window !== 'undefined' && (window as any).Alpine) {
+    const store = (window as any).Alpine.store('app') as AppStore;
+    if (store && store.currentTenant) {
+      tenantHeader['X-Tenant-ID'] = store.currentTenant;
+    }
+  }
+
+  // 2. Configuración de seguridad
   const secureOptions: RequestInit = {
     ...options,
-    credentials: 'include', // CRÍTICO: Envía/Recibe cookies del backend
+    credentials: 'include', // Envía cookies HttpOnly (JWT)
     headers: {
       'Content-Type': 'application/json',
-      'X-Requested-With': 'XMLHttpRequest', // Protección CSRF extra
+      'Accept': 'application/json',
+      'X-Requested-With': 'XMLHttpRequest', // Protección CSRF estándar
+      ...tenantHeader, // <--- AQUÍ SE APLICA EL FILTRO DE ORGANIZACIÓN
       ...options.headers,
     },
   };
@@ -98,10 +122,11 @@ export async function fetchApi(
   try {
     const response = await fetch(url, secureOptions);
 
-    // Si el backend rechaza la cookie (expirada o inválida)
+    // 3. Manejo de Sesión Expirada (401)
     if (response.status === 401) {
-      console.warn('[SecOps] Sesión inválida o expirada.');
-      if (window.location.pathname !== '/login') {
+      console.warn('[SecOps] Sesión inválida o expirada (401).');
+      // Evitar bucle de redirección si ya estamos en login
+      if (typeof window !== 'undefined' && !window.location.pathname.includes('/login')) {
         window.location.href = '/login';
       }
     }
@@ -116,6 +141,8 @@ export async function fetchApi(
 // --- Inicialización del Store ---
 
 export function initializeAlpineStore(alpine: Alpine) {
+  console.log('🔒 [Kaze-Quantum] Inicializando Security Store...');
+
   alpine.store('app', {
     // Estado Inicial
     loading: true,
@@ -123,7 +150,7 @@ export function initializeAlpineStore(alpine: Alpine) {
     user: null,
     currentTenant: null,
     sidebarOpen: true,
-    toasts: [] as Toast[], // Tipado explícito inicial
+    toasts: [],
     connectionStatus: {
       supabase: 'checking',
       backend: 'checking',
@@ -131,31 +158,30 @@ export function initializeAlpineStore(alpine: Alpine) {
     },
     securityContext: {
       cryptoReady: true,
-      tlsVerified: window.location.protocol === 'https:',
+      tlsVerified: typeof window !== 'undefined' && window.location.protocol === 'https:',
       corsAllowed: true,
     },
 
     async init() {
-      console.log('🚀 [Kaze-Quantum] Iniciando entorno seguro...');
       await this.checkSession();
     },
 
     async checkSession() {
       try {
-        // Consultamos /auth/me esperando que la cookie HttpOnly esté presente
+        // Consultamos /auth/me. El backend debe devolver el usuario y su tenant_id
         const response = await fetchApi('/auth/me', { method: 'GET' });
         
         if (response.ok) {
-          const userData = await response.json();
+          const userData: UserProfile = await response.json();
           this.setUser(userData);
           this.connectionStatus.backend = 'connected';
         } else {
-          this.authenticated = false;
-          this.user = null;
+          this.setUser(null); // Limpia estado si falla
         }
       } catch (e) {
-        console.error('[Store] Fallo al verificar sesión inicial');
+        console.error('[Store] Error verificando sesión:', e);
         this.connectionStatus.backend = 'error';
+        this.setUser(null);
       } finally {
         this.loading = false;
       }
@@ -171,8 +197,7 @@ export function initializeAlpineStore(alpine: Alpine) {
     },
 
     removeToast(id: string) {
-      // CORRECCIÓN TS(7006): Tipar explícitamente 't'
-      this.toasts = this.toasts.filter((t: Toast) => t.id !== id);
+      this.toasts = this.toasts.filter((t) => t.id !== id);
     },
 
     clearToasts() {
@@ -182,8 +207,12 @@ export function initializeAlpineStore(alpine: Alpine) {
     setUser(user: UserProfile | null) {
       this.user = user;
       this.authenticated = !!user;
-      if (user) {
+      
+      if (user && user.tenant_id) {
         this.currentTenant = user.tenant_id;
+        console.log(`[Store] Contexto establecido: Organización ${this.currentTenant}`);
+      } else {
+        this.currentTenant = null;
       }
     },
 
@@ -191,11 +220,9 @@ export function initializeAlpineStore(alpine: Alpine) {
       try {
         await fetchApi('/auth/logout', { method: 'POST' });
       } catch (e) {
-        console.error('Error notificando logout al servidor', e);
+        console.warn('Logout forzado (error de red)');
       } finally {
-        this.user = null;
-        this.authenticated = false;
-        this.currentTenant = null;
+        this.setUser(null);
         window.location.href = '/login';
       }
     },
@@ -203,7 +230,10 @@ export function initializeAlpineStore(alpine: Alpine) {
     async checkSupabaseConnection(): Promise<boolean> {
       try {
         this.connectionStatus.supabase = 'checking';
-        const { supabase } = await import('./supabase'); // Importación dinámica
+        // Importación dinámica para code-splitting
+        const { supabase } = await import('./supabase'); 
+        
+        // Query ligera para verificar conexión
         const { error } = await supabase.from('tenants').select('count', { count: 'exact', head: true });
         
         const isConnected = !error;
@@ -211,6 +241,7 @@ export function initializeAlpineStore(alpine: Alpine) {
         this.connectionStatus.lastCheck = Date.now();
         return isConnected;
       } catch (err) {
+        console.error('[Supabase] Error de conexión:', err);
         this.connectionStatus.supabase = 'error';
         return false;
       }
@@ -219,8 +250,7 @@ export function initializeAlpineStore(alpine: Alpine) {
     async checkBackendConnection(): Promise<boolean> {
       try {
         this.connectionStatus.backend = 'checking';
-        const baseUrl = getApiBaseUrl();
-        const response = await fetch(`${baseUrl}/health`); 
+        const response = await fetchApi('/health'); // Usamos fetchApi para verificar ruta base también
         const isConnected = response.ok;
         this.connectionStatus.backend = isConnected ? 'connected' : 'error';
         return isConnected;
@@ -230,22 +260,23 @@ export function initializeAlpineStore(alpine: Alpine) {
       }
     },
 
-    getDiagnostics() {
+    getDiagnostics(): SecurityDiagnostics {
       return {
         timestamp: new Date().toISOString(),
         status: this.connectionStatus,
         secureStorage: 'RAM Only (Active)',
-        cookiesDetected: document.cookie.length > 0,
-        tls: this.securityContext.tlsVerified
+        cookiesDetected: typeof document !== 'undefined' && document.cookie.length > 0,
+        tls: this.securityContext.tlsVerified,
+        currentTenantHeader: this.currentTenant // Verificación de que el tenant está cargado
       };
     }
-  });
+  } as AppStore); // Cast explícito para asegurar tipado
 }
 
 export function validateEnvironment(): boolean {
   const baseUrl = import.meta.env.PUBLIC_API_BASE;
   if (!baseUrl) {
-    console.error('❌ Falta PUBLIC_API_BASE');
+    console.error('❌ FATAL: Falta PUBLIC_API_BASE en variables de entorno.');
     return false;
   }
   return true;

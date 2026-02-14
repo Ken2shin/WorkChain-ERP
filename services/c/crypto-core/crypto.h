@@ -13,7 +13,7 @@ typedef struct {
     EVP_CIPHER_CTX *cipher_ctx;
     EVP_MD_CTX *hash_ctx;
     unsigned char key[32];      /* 256-bit key */
-    unsigned char iv[16];       /* 128-bit IV */
+    unsigned char iv[16];       /* 128-bit IV (Storage only) */
     unsigned char salt[16];     /* 128-bit salt */
 } WorkChainCryptoContext;
 
@@ -27,10 +27,11 @@ typedef struct {
 /* Return codes */
 typedef enum {
     WC_CRYPTO_SUCCESS = 0,
-    WC_CRYPTO_FAILURE = 1,
-    WC_CRYPTO_INVALID_INPUT = 2,
-    WC_CRYPTO_MEMORY_ERROR = 3,
-    WC_CRYPTO_OVERFLOW = 4
+    WC_CRYPTO_FAILURE = -1,
+    WC_CRYPTO_AUTH_FAILED = -2,    /* CRITICO: Error específico para fallo de Org/Tag */
+    WC_CRYPTO_INVALID_INPUT = -3,
+    WC_CRYPTO_MEMORY_ERROR = -4,
+    WC_CRYPTO_OVERFLOW = -5
 } WCCryptoError;
 
 /* Core API */
@@ -42,28 +43,33 @@ SecureBuffer* wc_secure_buffer_alloc(size_t size);
 void wc_secure_buffer_free(SecureBuffer *buf);
 WCCryptoError wc_secure_buffer_wipe(SecureBuffer *buf);
 
-/* Encryption/Decryption (AES-256-GCM) */
+/* Encryption (AES-256-GCM) with Organization Binding */
 WCCryptoError wc_encrypt_aes256gcm(
     WorkChainCryptoContext *ctx,
     const unsigned char *plaintext,
     size_t plaintext_len,
+    const unsigned char *aad,      /* ID Organización (Context Binding) */
+    size_t aad_len,
     unsigned char *ciphertext,
     size_t *ciphertext_len,
     unsigned char *tag,
     size_t tag_len
 );
 
+/* Decryption (AES-256-GCM) with Organization Validation */
 WCCryptoError wc_decrypt_aes256gcm(
     WorkChainCryptoContext *ctx,
     const unsigned char *ciphertext,
     size_t ciphertext_len,
+    const unsigned char *aad,      /* Debe coincidir con el ID de Encriptación */
+    size_t aad_len,
     unsigned char *plaintext,
     size_t *plaintext_len,
     const unsigned char *tag,
     size_t tag_len
 );
 
-/* Hashing (SHA-256, SHA-512) */
+/* Hashing (SHA-256) */
 WCCryptoError wc_hash_sha256(
     const unsigned char *data,
     size_t data_len,
@@ -71,6 +77,7 @@ WCCryptoError wc_hash_sha256(
     size_t *hash_len
 );
 
+/* Hashing (SHA-512) */
 WCCryptoError wc_hash_sha512(
     const unsigned char *data,
     size_t data_len,

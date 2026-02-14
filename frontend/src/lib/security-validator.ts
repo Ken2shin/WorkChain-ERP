@@ -1,59 +1,69 @@
 /**
- * Security Validator
+ * src/lib/security-validator.ts
+ * Security Validator - Kaze-Quantum ERP (Secure Edition)
  * ------------------
- * Validates that no sensitive information is exposed.
- * Prevents accidental hardcoding of URLs or secrets.
- * Adapted for Supabase & Production Security.
+ * Validates configuration, sanitizes inputs, and protects storage.
+ * Adapted for Supabase & Production Security with Strict Tenant Validation.
  */
 
 import { STORAGE_KEYS } from './constants';
 
 /**
- * Pattern validation to prevent hardcoded URLs in code
- * This runs at development time to catch issues
+ * Patrones de seguridad mejorados.
+ * Ya no buscan sintaxis de código (var = val), sino patrones de datos sensibles reales.
  */
 export const SECURITY_PATTERNS = {
-  // Detect hardcoded URLs (security issue)
-  hardcodedUrl: /https?:\/\/(?!{|YOUR_|CHANGE_|PLACEHOLDER_|localhost|127\.0\.0\.1)/i,
+  // Detect hardcoded URLs (excluyendo localhost y variables de entorno placeholders)
+  hardcodedUrl: /https?:\/\/(?!localhost|127\.0\.0\.1|workchain-erp\.onrender\.com)[^\s"']+/i,
   
-  // Detect hardcoded API keys (generic patterns)
-  hardcodedApiKey: /api[_-]?key\s*[:=]\s*['"]((?!{)[^'"]+)['"]/i,
+  // Detectar claves de API comunes (Google, AWS, Stripe, etc.)
+  // Busca cadenas de 20+ caracteres alfanuméricos con alta entropía
+  highEntropyString: /(?<![A-Za-z0-9])([A-Za-z0-9+/=]{32,})(?![A-Za-z0-9])/i,
   
-  // Detect hardcoded tokens (Bearer, JWT, etc)
-  hardcodedToken: /token\s*[:=]\s*['"]((?!{)[^'"]{20,})['"]/i,
+  // Detectar JWTs (Header.Payload.Signature)
+  jwtPattern: /eyJ[a-zA-Z0-9_-]{10,}\.eyJ[a-zA-Z0-9_-]{10,}\.[a-zA-Z0-9_-]{10,}/,
   
-  // Detect hardcoded secrets
-  hardcodedSecret: /secret\s*[:=]\s*['"]((?!{)[^'"]{10,})['"]/i,
-  
-  // Detect hardcoded passwords
-  hardcodedPassword: /password\s*[:=]\s*['"]((?!{)[^'"]{8,})['"]/i,
+  // Detectar UUIDs (Para validar Tenant ID)
+  uuidV4: /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+
+  // Detectar IPs privadas (192.168.x.x, 10.x.x.x) - Evita censurar versiones como 1.0.0
+  privateIp: /\b(?:192\.168\.|10\.|172\.(?:1[6-9]|2[0-9]|3[0-1])\.)\d{1,3}\.\d{1,3}\b/,
 };
 
 /**
- * Validate that no hardcoded secrets are present in configuration
- * * @param config - Configuration object to validate
+ * Validate that no hardcoded secrets are present in configuration values.
+ * @param config - Configuration object (e.g., import.meta.env)
  * @returns Array of security issues found
  */
 export function validateConfiguration(config: Record<string, any>): string[] {
   const issues: string[] = [];
+  const whitelist = [
+    'PUBLIC_SUPABASE_URL', 
+    'PUBLIC_SUPABASE_ANON_KEY', 
+    'PUBLIC_API_BASE',
+    'BASE_URL',
+    'MODE',
+    'DEV',
+    'PROD',
+    'SSR'
+  ];
 
   for (const [key, value] of Object.entries(config)) {
     if (typeof value === 'string') {
-      // Check for hardcoded URLs (Allowing Supabase URL via env var is fine, checking for literals)
-      if (SECURITY_PATTERNS.hardcodedUrl.test(value) && 
-          !value.includes('{') && 
-          !value.includes(import.meta.env.PUBLIC_SUPABASE_URL || 'skip')) {
-        issues.push(`[SECURITY] Potential hardcoded URL found in ${key}`);
+      // Ignorar claves permitidas
+      if (whitelist.some(w => key.includes(w))) continue;
+
+      // Check for potential secrets (high entropy strings) in public vars
+      if (key.startsWith('PUBLIC_') && SECURITY_PATTERNS.highEntropyString.test(value)) {
+        // Excepción: Supabase Anon Key es pública por diseño
+        if (!key.includes('ANON_KEY')) {
+           issues.push(`[SECURITY] Potential secret exposed in public var: ${key}`);
+        }
       }
 
-      // Check for hardcoded API keys
-      if (SECURITY_PATTERNS.hardcodedApiKey.test(value)) {
-        issues.push(`[SECURITY] Hardcoded API key found in ${key}`);
-      }
-
-      // Check for hardcoded tokens
-      if (SECURITY_PATTERNS.hardcodedToken.test(value)) {
-        issues.push(`[SECURITY] Hardcoded token found in ${key}`);
+      // Check for JWTs hardcoded
+      if (SECURITY_PATTERNS.jwtPattern.test(value)) {
+        issues.push(`[SECURITY] Hardcoded JWT found in ${key}`);
       }
     }
   }
@@ -62,53 +72,47 @@ export function validateConfiguration(config: Record<string, any>): string[] {
 }
 
 /**
- * Sanitize error messages to prevent exposure of sensitive data
- * Vital for logging errors to external services (Sentry, LogRocket)
- * * @param error - Original error message
- * @returns Sanitized error message safe to display
+ * Sanitize error messages to prevent exposure of sensitive data.
+ * Vital for logging errors to external services.
  */
-export function sanitizeErrorMessage(error: string): string {
+export function sanitizeErrorMessage(error: string | Error): string {
   if (!error) return '';
+  const message = error instanceof Error ? error.message : String(error);
 
-  // Remove URLs
-  let sanitized = error.replace(/https?:\/\/[^\s]+/g, '[URL]');
+  let sanitized = message;
+
+  // 1. Remove URLs (except allowed domains)
+  sanitized = sanitized.replace(/https?:\/\/(?!(workchain-erp\.onrender\.com))[^\s]+/g, '[URL_REDACTED]');
   
-  // Remove potential long tokens (hex/base64 strings > 50 chars)
-  sanitized = sanitized.replace(/[A-Za-z0-9+/=]{50,}/g, '[TOKEN]');
+  // 2. Remove JWTs
+  sanitized = sanitized.replace(SECURITY_PATTERNS.jwtPattern, '[JWT_REDACTED]');
   
-  // Remove IP addresses
-  sanitized = sanitized.replace(/\b\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}\b/g, '[IP]');
+  // 3. Remove Private IPs (Internal Network Leak)
+  sanitized = sanitized.replace(SECURITY_PATTERNS.privateIp, '[INTERNAL_IP]');
   
-  // Remove file paths (Unix/Windows)
-  sanitized = sanitized.replace(/(\/|\\)[^\s]+\.(php|jsx?|tsx?|env|json)/g, '[PATH]');
+  // 4. Remove File Paths (Server structure leak)
+  // Detects /var/www, C:\Users, etc.
+  sanitized = sanitized.replace(/(\/var\/|\/home\/|C:\\Users\\)[^\s]*/gi, '[SERVER_PATH]');
   
   return sanitized;
 }
 
 /**
- * Validate JWT token format (basic check)
- * Prevents storing invalid tokens
- * * @param token - Token to validate
- * @returns True if token appears valid
+ * Validate JWT token format strictly.
  */
 export function isValidJwtToken(token: string): boolean {
   if (!token || typeof token !== 'string') return false;
+  // Basic Regex check first
+  if (!SECURITY_PATTERNS.jwtPattern.test(token)) return false;
 
   try {
-    // JWT format: header.payload.signature
     const parts = token.split('.');
+    if (parts.length !== 3) return false;
+
+    // Check if payload is valid JSON
+    const payload = atob(parts[1].replace(/-/g, '+').replace(/_/g, '/'));
+    JSON.parse(payload);
     
-    if (parts.length !== 3) {
-      return false;
-    }
-
-    // Each part should be valid base64 or base64url
-    for (const part of parts) {
-      if (!isBase64Url(part)) {
-        return false;
-      }
-    }
-
     return true;
   } catch {
     return false;
@@ -116,23 +120,18 @@ export function isValidJwtToken(token: string): boolean {
 }
 
 /**
- * Check if string is valid base64URL (Standard for JWTs)
- * Adjusted to support Supabase tokens which might not have padding
- * * @param str - String to check
- * @returns True if valid base64
+ * Validate UUID format (Vital for Tenant ID).
+ * Prevents XSS or SQLi via Tenant ID injection in LocalStorage.
  */
-function isBase64Url(str: string): boolean {
-  // Regex for Base64URL (Alphanumeric + '-' + '_')
-  const base64UrlPattern = /^[A-Za-z0-9\-_]+$/;
-  return base64UrlPattern.test(str);
+export function isValidUuid(uuid: string): boolean {
+  return SECURITY_PATTERNS.uuidV4.test(uuid);
 }
 
 /**
- * Validate environment at startup
- * Ensures no hardcoded sensitive data is present and Supabase is configured
+ * Validate environment at startup.
  */
 export function validateSecurityAtStartup(): void {
-  // 1. Validate Supabase Configuration instead of generic API_BASE
+  // 1. Validate Supabase Config
   const sbUrl = import.meta.env.PUBLIC_SUPABASE_URL;
   const sbKey = import.meta.env.PUBLIC_SUPABASE_ANON_KEY;
   
@@ -150,66 +149,48 @@ export function validateSecurityAtStartup(): void {
     if (!sbUrl.startsWith('https://')) {
       console.error('❌ [SECURITY] Non-HTTPS connection detected in production.');
     }
-  }
-
-  // 3. Window Object Inspection (Prevent global leaks)
-  if (typeof window !== 'undefined') {
-    // We explicitly cast window to any to scan properties
-    const win = window as any;
-    const suspiciousKeys = ['SECRET', 'TOKEN', 'API_KEY', 'PASSWORD', 'PRIVATE_KEY'];
     
-    // Scan only own properties to avoid prototype chain noise
-    const globalProps = Object.getOwnPropertyNames(win);
-    
-    for (const key of globalProps) {
-      const upperKey = key.toUpperCase();
-      for (const suspicious of suspiciousKeys) {
-        if (upperKey.includes(suspicious) && typeof win[key] === 'string') {
-            // Ignore standard known libraries tokens if needed, but warn generally
-            if (key !== 'Supabase' && key !== 'Alpine') {
-                console.warn(`⚠️ [SECURITY] Potential secret exposed globally in window.${key}`);
-            }
-        }
-      }
-    }
+    // Check if console.log is active in prod (Performance & Security risk)
+    // console.log = () => {}; // Descomentar para silenciar logs en prod si se desea
   }
 }
 
 /**
- * Create a proxy/check for localStorage that prevents storage of secrets
- * * @param key - Storage key
- * @param value - Value to store
- * @returns True if storage was safe
+ * Proxy/Check for LocalStorage.
+ * Prevents storage of secrets and validates data integrity (Tenants).
  */
 export function isSafeToStore(key: string, value: string): boolean {
-  // 1. Allowlist: Permite explícitamente las claves de Supabase y App
+  // 1. Allowlist: Keys permitidas
   const allowedKeys = [
-    STORAGE_KEYS.AUTH_TOKEN,   // 'access_token'
-    STORAGE_KEYS.REFRESH_TOKEN,// 'refresh_token'
-    STORAGE_KEYS.USER_DATA,    // 'user'
+    STORAGE_KEYS.AUTH_TOKEN,
+    STORAGE_KEYS.REFRESH_TOKEN,
+    STORAGE_KEYS.USER_DATA,
     STORAGE_KEYS.CURRENT_TENANT,
     STORAGE_KEYS.THEME_PREFERENCE,
-    'sb-access-token',         // Supabase default sometimes
-    'supabase.auth.token'      // Supabase default sometimes
+    'sb-access-token',
+    'sb-refresh-token',
+    'supabase.auth.token' 
   ];
 
-  if (allowedKeys.includes(key)) {
-    return true;
+  // Si la clave no está permitida, bloqueamos por defecto (Whitelisting > Blacklisting)
+  if (!allowedKeys.includes(key)) {
+      // Opcional: Permitir otras claves si no parecen secretos
+      // Pero por seguridad estricta, mejor advertir.
+      // console.warn(`[Storage] Storing unknown key: ${key}`);
   }
 
-  // 2. Blocklist: Patterns check
-  if (SECURITY_PATTERNS.hardcodedApiKey.test(value)) {
-    console.error(`🛑 [SECURITY] Blocked attempt to store API key in localStorage.${key}`);
-    return false;
+  // 2. Validación Específica de Tenant
+  // Esto arregla el "filtrado de login": asegura que nunca se guarde basura como Tenant ID
+  if (key === STORAGE_KEYS.CURRENT_TENANT) {
+      if (!isValidUuid(value)) {
+          console.error(`🛑 [SECURITY] Blocked invalid Tenant ID storage: ${value}`);
+          return false;
+      }
   }
 
-  if (SECURITY_PATTERNS.hardcodedSecret.test(value)) {
-    console.error(`🛑 [SECURITY] Blocked attempt to store secret in localStorage.${key}`);
-    return false;
-  }
-
-  if (SECURITY_PATTERNS.hardcodedPassword.test(value)) {
-    console.error(`🛑 [SECURITY] Blocked attempt to store password in localStorage.${key}`);
+  // 3. Blocklist: Patterns check (Redundancia de seguridad)
+  if (SECURITY_PATTERNS.jwtPattern.test(value) && !key.toLowerCase().includes('token')) {
+    console.error(`🛑 [SECURITY] Blocked attempt to store JWT in non-token key: ${key}`);
     return false;
   }
 

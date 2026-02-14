@@ -1,263 +1,277 @@
-use actix_web::{web, App, HttpServer, HttpResponse, middleware};
+use actix_web::{web, App, HttpServer, HttpResponse, HttpRequest, middleware, Responder};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
-use log::info;
+use dashmap::DashMap; // MEJORA: Reemplazo de Mutex<HashMap> para alto rendimiento
+use std::sync::Arc;
+use log::{info, warn, error};
 use dotenv::dotenv;
+use chrono::{DateTime, Utc, Timelike};
 
 /**
- * WorkChain ERP - Anomaly Detection Service
- * Written in Rust for memory safety and performance
- *
- * Detects:
- * - Behavioral anomalies
- * - Geographic inconsistencies
- * - Access time anomalies
- * - Request pattern changes
- * - Endpoint enumeration
+ * WorkChain ERP - Anomaly Detection Service (Optimized)
+ * * Improvements:
+ * - DashMap for concurrent access (No global mutex locking).
+ * - Memory caps on vectors to prevent DoS.
+ * - Strict typing for Tenant Isolation.
+ * - API Key Security.
  */
+
+// ==========================================
+// ESTRUCTURAS DE DATOS
+// ==========================================
 
 #[derive(Clone)]
 struct AppState {
-    baselines: Arc<Mutex<HashMap<String, UserBaseline>>>,
+    // DashMap permite acceso concurrente. Clave: "tenant_id:user_id"
+    baselines: Arc<DashMap<String, UserBaseline>>,
+    api_key: String,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Serialize, Deserialize)]
 struct UserBaseline {
     user_id: i32,
     tenant_id: String,
     typical_countries: Vec<String>,
-    typical_hours: Vec<u8>,
-    request_count_hourly: Vec<u32>,
+    typical_hours: Vec<u32>,
     known_user_agents: Vec<String>,
-    endpoints_24h: Vec<String>,
-    last_updated: i64,
+    endpoints_history: Vec<String>, // Renombrado para claridad
+    last_updated: DateTime<Utc>,
 }
 
-#[derive(Deserialize, Serialize)]
+#[derive(Deserialize, Serialize, Debug)]
 struct AnomalyRequest {
     user_id: i32,
     tenant_id: String,
     ip_address: String,
     user_agent: String,
     endpoint: String,
-    timestamp: i64,
+}
+
+#[derive(Deserialize)]
+struct ResetRequest {
+    user_id: i32,
+    tenant_id: String,
 }
 
 #[derive(Serialize)]
 struct AnomalyResponse {
     anomaly_score: f32,
     anomalies: Vec<String>,
-    risk_level: String, // low, medium, high, critical
+    risk_level: String,
+    action: String, // ALLOW, CHALLENGE, BLOCK
 }
+
+// ==========================================
+// CONFIGURACIÓN Y MAIN
+// ==========================================
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
-    dotenv().ok(); // Load from root .env
+    dotenv().ok();
     env_logger::init_from_env(env_logger::Env::new().default_filter_or("info"));
 
+    let api_key = std::env::var("ANOMALY_API_KEY").unwrap_or_else(|_| "change_me_in_production".to_string());
+    
     let app_state = AppState {
-        baselines: Arc::new(Mutex::new(HashMap::new())),
+        baselines: Arc::new(DashMap::new()),
+        api_key,
     };
 
-    info!("Starting Anomaly Detection Service");
+    info!("🚀 Anomaly Detection Service started on port 3001");
+    info!("🔒 Concurrency mode: DashMap (Lock-free reading)");
 
     HttpServer::new(move || {
         App::new()
             .app_data(web::Data::new(app_state.clone()))
             .wrap(middleware::Logger::default())
+            // Middleware de seguridad simple
+            .wrap(middleware::NormalizePath::trim())
             .route("/health", web::get().to(health))
-            .route("/detect", web::post().to(detect_anomaly))
-            .route("/baseline", web::post().to(update_baseline))
-            .route("/reset", web::post().to(reset_baseline))
+            .service(
+                web::scope("/api/v1")
+                    .route("/detect", web::post().to(detect_anomaly))
+                    .route("/baseline", web::post().to(update_baseline))
+                    .route("/reset", web::post().to(reset_baseline))
+            )
     })
     .bind("0.0.0.0:3001")?
     .run()
     .await
 }
 
-async fn health() -> HttpResponse {
-    HttpResponse::Ok().json(serde_json::json!({
-        "status": "healthy",
-        "service": "anomaly-detector"
-    }))
+async fn health() -> impl Responder {
+    HttpResponse::Ok().json(serde_json::json!({ "status": "healthy", "engine": "rust-dashmap" }))
 }
 
-/**
- * Main anomaly detection endpoint
- */
+// Helper para validar API Key
+fn is_authorized(req: &HttpRequest, state: &web::Data<AppState>) -> bool {
+    match req.headers().get("X-API-KEY") {
+        Some(key) => key.to_str().unwrap_or("") == state.api_key,
+        None => false,
+    }
+}
+
+// ==========================================
+// HANDLERS
+// ==========================================
+
 async fn detect_anomaly(
+    req: HttpRequest,
     state: web::Data<AppState>,
-    req: web::Json<AnomalyRequest>,
+    body: web::Json<AnomalyRequest>,
 ) -> HttpResponse {
-    let baselines = state.baselines.lock().unwrap();
-    let key = format!("{}:{}", req.tenant_id, req.user_id);
+    if !is_authorized(&req, &state) {
+        return HttpResponse::Unauthorized().json(serde_json::json!({"error": "Invalid API Key"}));
+    }
 
-    let baseline = baselines.get(&key).cloned();
-    drop(baselines);
+    // Generar clave compuesta para aislamiento Multi-Tenant estricto
+    let key = format!("{}:{}", body.tenant_id, body.user_id);
 
-    let (score, anomalies) = if let Some(baseline) = baseline {
-        calculate_anomaly_score(&req, &baseline)
-    } else {
-        (0.0, vec![])
+    // DashMap permite obtener una referencia de lectura sin bloquear todo el mapa
+    let baseline_ref = state.baselines.get(&key);
+
+    let (score, anomalies) = match baseline_ref {
+        Some(entry) => calculate_anomaly_score(&body, entry.value()),
+        None => (0.0, vec!["New user profile created".to_string()]), // Cold start
     };
 
     let risk_level = determine_risk_level(score);
+    let action = match risk_level.as_str() {
+        "critical" => "BLOCK",
+        "high" => "CHALLENGE",
+        _ => "ALLOW",
+    };
 
-    info!(
-        "Anomaly detected: user_id={}, score={}, risk_level={}",
-        req.user_id, score, risk_level
-    );
+    if score > 0.0 {
+        info!("⚠️ Anomaly detected [Tenant: {} User: {}]: Score: {}, Risk: {}", body.tenant_id, body.user_id, score, risk_level);
+    }
 
     HttpResponse::Ok().json(AnomalyResponse {
         anomaly_score: score,
         anomalies,
         risk_level,
+        action: action.to_string(),
     })
 }
 
-/**
- * Calculate anomaly score based on baseline
- */
+async fn update_baseline(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    body: web::Json<AnomalyRequest>,
+) -> HttpResponse {
+    if !is_authorized(&req, &state) {
+        return HttpResponse::Unauthorized().finish();
+    }
+
+    let key = format!("{}:{}", body.tenant_id, body.user_id);
+    let now = Utc::now();
+    let country = extract_country(&body.ip_address);
+    let hour = now.hour();
+
+    // DashMap: Operación atómica de escritura/actualización
+    state.baselines.entry(key).and_modify(|b| {
+        // Actualizar datos existentes con límites de memoria
+        if !b.typical_countries.contains(&country) {
+            if b.typical_countries.len() < 5 { b.typical_countries.push(country.clone()); }
+        }
+        if !b.typical_hours.contains(&hour) {
+            b.typical_hours.push(hour);
+        }
+        if !b.known_user_agents.contains(&body.user_agent) {
+            // Límite anti-DoS: Solo guardar últimos 10 UAs
+            if b.known_user_agents.len() >= 10 { b.known_user_agents.remove(0); }
+            b.known_user_agents.push(body.user_agent.clone());
+        }
+        
+        // Sliding window para endpoints (Límite 50)
+        b.endpoints_history.push(body.endpoint.clone());
+        if b.endpoints_history.len() > 50 {
+            b.endpoints_history.remove(0);
+        }
+        
+        b.last_updated = now;
+    }).or_insert(UserBaseline {
+        user_id: body.user_id,
+        tenant_id: body.tenant_id.clone(),
+        typical_countries: vec![country],
+        typical_hours: vec![hour],
+        known_user_agents: vec![body.user_agent.clone()],
+        endpoints_history: vec![body.endpoint.clone()],
+        last_updated: now,
+    });
+
+    HttpResponse::Ok().json(serde_json::json!({ "status": "updated" }))
+}
+
+async fn reset_baseline(
+    req: HttpRequest,
+    state: web::Data<AppState>,
+    body: web::Json<ResetRequest>, // Uso de Struct tipado en lugar de JSON genérico
+) -> HttpResponse {
+    if !is_authorized(&req, &state) {
+        return HttpResponse::Unauthorized().finish();
+    }
+
+    let key = format!("{}:{}", body.tenant_id, body.user_id);
+    
+    // Eliminación atómica
+    if state.baselines.remove(&key).is_some() {
+        info!("Baseline reset for user {}", key);
+        HttpResponse::Ok().json(serde_json::json!({ "status": "deleted" }))
+    } else {
+        HttpResponse::NotFound().json(serde_json::json!({ "error": "Profile not found" }))
+    }
+}
+
+// ==========================================
+// LOGICA DE NEGOCIO Y CALCULOS
+// ==========================================
+
 fn calculate_anomaly_score(req: &AnomalyRequest, baseline: &UserBaseline) -> (f32, Vec<String>) {
     let mut score: f32 = 0.0;
     let mut anomalies = Vec::new();
 
-    // 1. Geographic anomaly
-    if !baseline.typical_countries.contains(&extract_country(&req.ip_address)) {
+    // 1. Geo Check
+    let current_country = extract_country(&req.ip_address);
+    if !baseline.typical_countries.contains(&current_country) {
         score += 3.0;
-        anomalies.push("Geographic anomaly detected".to_string());
+        anomalies.push(format!("Unusual Location: {}", current_country));
     }
 
-    // 2. Time of access anomaly
-    let hour = extract_hour(req.timestamp);
-    if !baseline.typical_hours.contains(&hour) {
+    // 2. Time Check
+    let current_hour = Utc::now().hour();
+    if !baseline.typical_hours.contains(&current_hour) {
+        score += 1.5; // Bajamos peso, puede ser trabajo nocturno
+        anomalies.push("Unusual Time".to_string());
+    }
+
+    // 3. User Agent Check
+    if !baseline.known_user_agents.contains(&req.user_agent) {
         score += 2.0;
-        anomalies.push("Unusual access time".to_string());
+        anomalies.push("New Device/Browser".to_string());
     }
 
-    // 3. User-agent mismatch
-    if !is_user_agent_known(&req.user_agent, &baseline.known_user_agents) {
-        score += 1.5;
-        anomalies.push("Unknown user agent".to_string());
-    }
-
-    // 4. Endpoint enumeration
-    if is_endpoint_enumeration(&req.endpoint, &baseline.endpoints_24h) {
-        score += 4.0;
-        anomalies.push("Possible endpoint enumeration".to_string());
+    // 4. Endpoint Enumeration (Heurística simple)
+    // Si el usuario está tocando muchos endpoints nuevos rápidamente
+    if !baseline.endpoints_history.contains(&req.endpoint) {
+        score += 0.5; // Pequeña penalización por exploración normal
     }
 
     (score, anomalies)
 }
 
-/**
- * Update user baseline (called during normal operation)
- */
-async fn update_baseline(
-    state: web::Data<AppState>,
-    req: web::Json<AnomalyRequest>,
-) -> HttpResponse {
-    let mut baselines = state.baselines.lock().unwrap();
-    let key = format!("{}:{}", req.tenant_id, req.user_id);
-
-    let baseline = baselines.entry(key).or_insert_with(|| UserBaseline {
-        user_id: req.user_id,
-        tenant_id: req.tenant_id.clone(),
-        typical_countries: vec![extract_country(&req.ip_address)],
-        typical_hours: vec![extract_hour(req.timestamp)],
-        request_count_hourly: vec![1],
-        known_user_agents: vec![req.user_agent.clone()],
-        endpoints_24h: vec![req.endpoint.clone()],
-        last_updated: req.timestamp,
-    });
-
-    // Update baseline with new data
-    if !baseline.typical_countries.contains(&extract_country(&req.ip_address)) {
-        baseline.typical_countries.push(extract_country(&req.ip_address));
-    }
-
-    if !baseline.typical_hours.contains(&extract_hour(req.timestamp)) {
-        baseline.typical_hours.push(extract_hour(req.timestamp));
-    }
-
-    if !baseline.known_user_agents.contains(&req.user_agent) {
-        baseline.known_user_agents.push(req.user_agent.clone());
-    }
-
-    if !baseline.endpoints_24h.contains(&req.endpoint) {
-        baseline.endpoints_24h.push(req.endpoint.clone());
-    }
-
-    baseline.last_updated = req.timestamp;
-
-    drop(baselines);
-
-    HttpResponse::Ok().json(serde_json::json!({
-        "status": "baseline updated",
-        "user_id": req.user_id
-    }))
-}
-
-/**
- * Reset baseline for a user
- */
-async fn reset_baseline(
-    state: web::Data<AppState>,
-    req: web::Json<serde_json::Value>,
-) -> HttpResponse {
-    let user_id = req["user_id"].as_i64().unwrap_or(0) as i32;
-    let tenant_id = req["tenant_id"].as_str().unwrap_or("default");
-
-    let mut baselines = state.baselines.lock().unwrap();
-    let key = format!("{}:{}", tenant_id, user_id);
-    baselines.remove(&key);
-
-    HttpResponse::Ok().json(serde_json::json!({
-        "status": "baseline reset",
-        "user_id": user_id
-    }))
-}
-
-/**
- * Helper: Extract country from IP (placeholder)
- */
 fn extract_country(ip: &str) -> String {
-    // TODO: Integrate with MaxMind GeoIP
-    // For now, return a placeholder
-    "US".to_string()
+    // Placeholder para integración real con GeoIP (MaxMind)
+    // En producción usarías una crate como `maxminddb`
+    if ip.starts_with("10.") || ip.starts_with("192.") {
+        return "LAN".to_string();
+    }
+    "US".to_string() 
 }
 
-/**
- * Helper: Extract hour from timestamp
- */
-fn extract_hour(timestamp: i64) -> u8 {
-    let hours = (timestamp / 3600) % 24;
-    hours as u8
-}
-
-/**
- * Helper: Check if user-agent is known
- */
-fn is_user_agent_known(user_agent: &str, known: &[String]) -> bool {
-    known.iter().any(|ua| ua.contains(user_agent.split('/').next().unwrap_or("")))
-}
-
-/**
- * Helper: Detect endpoint enumeration
- */
-fn is_endpoint_enumeration(current: &str, recent: &[String]) -> bool {
-    // If same user accessed 50+ unique endpoints in 24h, it's enumeration
-    recent.len() > 50 && !recent.contains(&current.to_string())
-}
-
-/**
- * Determine risk level
- */
 fn determine_risk_level(score: f32) -> String {
     match score {
         x if x < 2.0 => "low".to_string(),
-        x if x < 4.0 => "medium".to_string(),
+        x if x < 4.5 => "medium".to_string(),
         x if x < 7.0 => "high".to_string(),
         _ => "critical".to_string(),
     }
