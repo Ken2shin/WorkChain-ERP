@@ -1,7 +1,6 @@
 ---
 import Layout from '../layouts/Layout.astro';
 ---
-
 <Layout title="Login - WorkChain ERP">
   <div class="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
     <div class="w-full max-w-md">
@@ -17,7 +16,6 @@ import Layout from '../layouts/Layout.astro';
         </div>
 
         <form x-data="loginForm()" @submit.prevent="submit()" class="space-y-5">
-          
           <div x-show="!isSubdomain" x-transition>
             <label class="block text-sm font-semibold text-slate-300 mb-2">Organización</label>
             <select
@@ -99,20 +97,10 @@ import Layout from '../layouts/Layout.astro';
   </div>
 </Layout>
 
-<script>
-  import { getTenantByDomain } from '../lib/supabase';
-  import { fetchApi } from '../lib/alpine-store';
-  import type { TenantPublicInfo } from '../lib/supabase';
-
-  // --- CORRECCIÓN DE ERRORES TYPESCRIPT ---
-
-  // Declarar loginForm en Window para solucionar ts(2339)
-  declare global {
-    interface Window {
-      loginForm: () => any;
-      Alpine: any;
-    }
-  }
+<!-- CLIENT-SIDE SCRIPT: usa fetch a tus endpoints internos (no importa si estás en Render o local) -->
+<script type="module">
+  // Declaraciones para TypeScript/IDE (opcional)
+  // window.loginForm = function () { ... }
 
   window.loginForm = function () {
     return {
@@ -124,42 +112,53 @@ import Layout from '../layouts/Layout.astro';
         submitting: false,
         error: '',
       },
-      // Solución ts(2322): Definir explícitamente el tipo de array
-      organizations: [] as TenantPublicInfo[],
+      organizations: [],
       detectedTenantName: '',
       isSubdomain: false,
-      connectionStatus: 'loading' as 'loading' | 'connected' | 'error',
+      connectionStatus: 'loading', // 'loading' | 'connected' | 'error'
 
       async init() {
+        // Detectar subdominio / dominio y tratar de resolver tenant por dominio
         const hostname = window.location.hostname;
-        
-        if (hostname !== 'workchain-erp.onrender.com' && hostname !== 'localhost') {
-           try {
-              const tenant = await getTenantByDomain(hostname);
-              if (tenant) {
+
+        // Si tu dominio de producción es exactamente 'workchain-erp.onrender.com' ignora como subdominio.
+        const publicHosts = ['workchain-erp.onrender.com', 'localhost', '127.0.0.1'];
+
+        if (!publicHosts.includes(hostname)) {
+          try {
+            // Llamar endpoint que resuelve tenant por dominio
+            const res = await fetch(`/api/tenant-by-domain?domain=${encodeURIComponent(hostname)}`);
+            if (res.ok) {
+              const tenant = await res.json();
+              if (tenant && tenant.id) {
                 this.form.tenantId = tenant.id;
-                this.detectedTenantName = tenant.name;
+                this.detectedTenantName = tenant.name || '';
                 this.isSubdomain = true;
                 this.connectionStatus = 'connected';
+                // sincronizar nombre en el store app
+                if (window.Alpine) window.Alpine.store('app').currentTenantName = tenant.name || null;
                 return;
               }
-           } catch (e) {
-              console.error("Error detectando tenant", e);
-           }
+            }
+          } catch (e) {
+            console.error('Error detectando tenant por dominio', e);
+          }
         }
+
+        // Si no se detectó subdominio, cargar lista de tenants
         await this.loadTenants();
       },
 
       async loadTenants() {
         try {
           this.connectionStatus = 'loading';
-          const { getTenants } = await import('../lib/supabase');
-          this.organizations = (await getTenants()) as TenantPublicInfo[];
+          const res = await fetch('/api/tenants');
+          if (!res.ok) throw new Error('No se pudieron cargar las organizaciones');
+          const data = await res.json();
+          this.organizations = Array.isArray(data) ? data : [];
           this.connectionStatus = 'connected';
         } catch (e) {
-          // Solución ts(18046): Castear el error para acceder a .message
-          const error = e instanceof Error ? e.message : "Error al conectar.";
-          this.form.error = error;
+          this.form.error = (e && e.message) ? e.message : 'Error al conectar';
           this.connectionStatus = 'error';
         }
       },
@@ -170,8 +169,17 @@ import Layout from '../layouts/Layout.astro';
         this.form.submitting = true;
 
         try {
-          const response = await fetchApi('/auth/login', {
+          // Validaciones sencillas (opcional)
+          if (!this.form.email || !this.form.password) {
+            throw new Error('Ingrese correo y contraseña');
+          }
+          if (!this.form.tenantId && !this.isSubdomain) {
+            throw new Error('Seleccione la organización');
+          }
+
+          const res = await fetch('/api/auth/login', {
             method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
               email: this.form.email,
               password: this.form.password,
@@ -180,35 +188,29 @@ import Layout from '../layouts/Layout.astro';
             })
           });
 
-          if (!response.ok) {
-            const data = await response.json().catch(() => ({}));
-            throw new Error(data.message || 'Credenciales inválidas');
+          if (!res.ok) {
+            const err = await res.json().catch(()=>({ message: 'Credenciales inválidas' }));
+            throw new Error(err.message || 'Credenciales inválidas');
           }
 
+          // actualizar store y redirigir
           if (window.Alpine) {
             await window.Alpine.store('app').checkSession();
           }
-
-          window.location.href = '/dashboard';
-
+          window.location.href = '/dashboard'; // ajusta la ruta si tienes otra
         } catch (e) {
-          // Solución ts(18046)
-          this.form.error = e instanceof Error ? e.message : 'Error de conexión';
+          this.form.error = (e && e.message) ? e.message : 'Error de conexión';
         } finally {
           this.form.submitting = false;
         }
       }
-    };
-  };
+    }
+  }
 </script>
 
 <style>
-  /* [x-cloak] oculta los elementos hasta que Alpine.js esté listo */
   [x-cloak] { display: none !important; }
-
-  .animate-shake {
-    animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both;
-  }
+  .animate-shake { animation: shake 0.4s cubic-bezier(.36,.07,.19,.97) both; }
   @keyframes shake {
     10%, 90% { transform: translate3d(-1px, 0, 0); }
     20%, 80% { transform: translate3d(2px, 0, 0); }
