@@ -1,7 +1,6 @@
 # ==========================================
-# BUILDER MULTI-LENGUAJE (SERVICIOS INTERNOS)
+# ETAPA 1: BUILDER MULTI-LENGUAJE (Servicios Internos)
 # ==========================================
-
 FROM swift:6.0-bookworm AS swift-source
 FROM golang:1.22-bookworm AS go-source
 
@@ -39,17 +38,38 @@ RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
 # ---------- Servicios ----------
 WORKDIR /app/services
 COPY ./services/ /app/services/
+# Creamos la carpeta para evitar error si no hay binarios aún
 RUN mkdir -p /app/services/bin_outputs
 
 
 # ==========================================
-# BACKEND LARAVEL (PRODUCCIÓN)
+# ETAPA 2: BUILDER FRONTEND (Astro 5)
 # ==========================================
+# Necesitamos esta etapa para compilar el Astro Server
+FROM node:20-alpine AS frontend-builder
 
+WORKDIR /app/frontend
+
+COPY ./frontend/package.json ./frontend/package-lock.json* ./frontend/pnpm-lock.yaml* ./
+# Instalamos pnpm si lo usas, si no, usa npm ci
+RUN npm install -g pnpm && pnpm install
+
+COPY ./frontend .
+# Esto genera la carpeta /app/frontend/dist
+RUN pnpm run build
+
+
+# ==========================================
+# ETAPA 3: PRODUCCIÓN FINAL (Laravel + Nginx + Astro Runtime)
+# ==========================================
 FROM php:8.3-fpm
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV COMPOSER_ALLOW_SUPERUSER=1
+
+# 1. Instalamos dependencias y NODE.JS (Obligatorio para correr Astro)
+RUN curl -fsSL https://deb.nodesource.com/setup_20.x | bash - \
+    && apt-get install -y nodejs
 
 RUN apt-get update && apt-get install -y \
     nginx curl zip unzip git supervisor \
@@ -57,15 +77,14 @@ RUN apt-get update && apt-get install -y \
     && docker-php-ext-install pdo pdo_pgsql mbstring zip \
     && rm -rf /var/lib/apt/lists/*
 
-# ---------- Composer ----------
+# 2. Copiamos Composer
 COPY --from=composer:latest /usr/bin/composer /usr/bin/composer
 
-# ---------- Laravel ----------
+# 3. Copiamos Laravel
 WORKDIR /var/www
-# Copiamos la carpeta laravel completa
 COPY ./laravel/ /var/www/
 
-# Verificación crítica: artisan debe existir y tener permisos
+# Verificación crítica: artisan debe existir
 RUN if [ ! -f /var/www/artisan ]; then \
         echo "ERROR: artisan no encontrado en /var/www"; \
         ls -la /var/www; \
@@ -74,19 +93,22 @@ RUN if [ ! -f /var/www/artisan ]; then \
 
 RUN chmod +x /var/www/artisan
 
-# ---------- Dependencias ----------
-# --no-scripts es vital para que no falle el build
+# 4. Instalamos dependencias de Laravel
 RUN composer install \
     --no-interaction \
     --no-dev \
     --optimize-autoloader \
     --no-scripts
 
-# ---------- Binarios multi-lenguaje ----------
+# 5. Copiamos los binarios multi-lenguaje
 RUN mkdir -p /var/www/bin
 COPY --from=multi-builder /app/services/bin_outputs/ /var/www/bin/
 
-# ---------- Cache y permisos ----------
+# 6. 🔥 COPIAMOS EL BUILD DE ASTRO (Para que Nginx lo encuentre)
+# Lo copiamos a una carpeta específica para el servidor
+COPY --from=frontend-builder /app/frontend/dist /var/www/astro-server
+
+# 7. Permisos y Caché
 RUN mkdir -p \
     storage/framework/sessions \
     storage/framework/views \
@@ -96,14 +118,13 @@ RUN mkdir -p \
  && chown -R www-data:www-data storage bootstrap/cache /var/www/artisan \
  && chmod -R 775 storage bootstrap/cache /var/www/artisan
 
-# ---------- Configuración Nginx/Supervisor (opcional si usas artisan serve) ----------
+# 8. Configuraciones de Nginx y Supervisor
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
 
-# Render asigna puerto dinámico, pero exponemos 80 por convención
+# Render asigna puerto dinámico, pero Nginx lo manejará
 EXPOSE 80
 
-# ---------- Arranque ----------
-# 🔥 CORRECCIÓN FINAL: Usamos sh -c para leer la variable $PORT de Render
-# Si Render asigna 10000, usará 10000. Si no, usa 80.
-CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]
+# 9. ARRANQUE: Supervisor es quien levanta TODO (Nginx + PHP + Node)
+# Si usas 'php artisan serve' aquí, Astro y Nginx MORIRÁN.
+CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/laravel.conf"]

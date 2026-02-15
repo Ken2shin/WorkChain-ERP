@@ -1,12 +1,24 @@
+# Ignorar dependencias locales (se instalan limpio en Docker)
 node_modules
 frontend/node_modules
 laravel/vendor
+
+# Ignorar git y configuraciones de entorno local
 .git
 .github
-.next
 .vscode
-dist
-build
 .env
+
+# Ignorar archivos temporales o de sistema
+.next
 *.log
+.DS_Store
+Thumbs.db
+
+# Ignorar archivos grandes o innecesarios
 go1.21.0.linux-amd64.tar.gz
+
+# ⚠️ ¡IMPORTANTE! NO IGNORAR EL BUILD DE ASTRO
+# Comentamos estas líneas para que Docker pueda copiar el resultado del build
+# dist
+# build

@@ -37,13 +37,12 @@ WORKDIR /var/www
 # Copiamos la carpeta completa
 COPY ./laravel/ /var/www/
 
-# Aseguramos que artisan sea ejecutable (por si acaso)
+# Aseguramos que artisan sea ejecutable
 RUN chmod +x /var/www/artisan
 
 # =========================
-# DEPENDENCIAS PHP (FIX: NO SCRIPTS)
+# DEPENDENCIAS PHP
 # =========================
-# --no-scripts evita que falle si faltan variables de entorno en el build
 RUN composer install \
     --no-interaction \
     --no-dev \
@@ -51,7 +50,7 @@ RUN composer install \
     --no-scripts
 
 # =========================
-# CACHE Y PERMISOS (CLAVE)
+# CACHE Y PERMISOS
 # =========================
 RUN mkdir -p \
     storage/framework/sessions \
@@ -60,22 +59,16 @@ RUN mkdir -p \
     storage/logs \
     bootstrap/cache
 
-# Asignamos permisos a las carpetas de almacenamiento y al artisan
+# Asignamos permisos
 RUN chown -R www-data:www-data storage bootstrap/cache /var/www/artisan
 RUN chmod -R 775 storage bootstrap/cache /var/www/artisan
 
 # =========================
-# NGINX + SUPERVISOR
-# =========================
-COPY ./docker/nginx.conf /etc/nginx/sites-available/default
-COPY ./docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
-
-# Exponemos el puerto 80 por convención
-EXPOSE 80
-
-# =========================
 # ARRANQUE (FIX PARA RENDER)
 # =========================
-# Usamos 'sh -c' para poder leer la variable de entorno $PORT.
-# Si Render asigna puerto 10000, Laravel usará 10000.
+# Exponemos 80 por convención, pero usamos $PORT
+EXPOSE 80
+
+# Usamos 'sh -c' para que Laravel tome el puerto que Render le asigne dinámicamente.
+# Esto EVITA el error "Port scan timeout".
 CMD ["sh", "-c", "php artisan serve --host=0.0.0.0 --port=${PORT:-80}"]
