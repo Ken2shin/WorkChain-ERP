@@ -9,9 +9,8 @@ interface Props {
 const {
   title = 'WorkChain ERP',
   description = 'Professional ERP for SMEs'
-} = Astro.props as Props;
+} = Astro.props;
 ---
-
 <!doctype html>
 <html lang="es">
   <head>
@@ -19,7 +18,14 @@ const {
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="description" content={description} />
     <title>{title}</title>
+
+    <!-- Favicon (evita error 404 y mixed content) -->
+    <link rel="icon" href="/favicon.ico" />
+
+    <!-- Fuerza contenido seguro -->
+    <meta http-equiv="Content-Security-Policy" content="upgrade-insecure-requests" />
   </head>
+
   <body class="min-h-screen bg-gray-100 text-gray-900">
     <slot />
   </body>

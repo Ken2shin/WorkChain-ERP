@@ -1,5 +1,10 @@
 ---
 import Layout from '../layouts/Layout.astro';
+
+// Variable de entorno (Render)
+const API_BASE =
+  import.meta.env.PUBLIC_API_BASE
+  || 'https://workchain-erp.onrender.com/api/v1';
 ---
 
 <Layout title="Login - WorkChain ERP">
@@ -54,15 +59,7 @@ import Layout from '../layouts/Layout.astro';
 </Layout>
 
 <script is:inline>
-  /**
-   * Al usar is:inline, el compilador de Astro ignora el tipado de TS,
-   * eliminando los errores de "interface" y "Property loginForm does not exist".
-   */
-  document.addEventListener('alpine:init', () => {
-    window.Alpine.store('app', {
-      async checkSession() {}
-    });
-  });
+  const API_BASE = "{{API_BASE}}";
 
   window.loginForm = () => ({
     form: {
@@ -77,8 +74,7 @@ import Layout from '../layouts/Layout.astro';
       this.form.error = '';
 
       try {
-        // La conexión con login.ts ocurre aquí a través del fetch
-        const res = await fetch('/api/auth/login', {
+        const res = await fetch(`${API_BASE}/auth/login`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
@@ -93,7 +89,6 @@ import Layout from '../layouts/Layout.astro';
           throw new Error(data.message || 'Credenciales inválidas');
         }
 
-        // Si el login en login.ts es exitoso, redirigimos
         window.location.href = '/dashboard';
       } catch (e) {
         this.form.error = e.message || 'Error de conexión';
