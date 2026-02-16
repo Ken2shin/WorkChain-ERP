@@ -30,7 +30,7 @@ class AuthController extends ApiController
         $validated = $request->validate([
             'email' => 'required|email|max:255',
             'password' => 'required|min:8',
-            'tenant_id' => 'required|integer|exists:tenants,id',
+            
         ]);
 
         try {
