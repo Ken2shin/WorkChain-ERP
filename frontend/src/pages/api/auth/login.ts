@@ -1,6 +1,6 @@
 import type { APIRoute } from 'astro';
 import pg from 'pg';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs'; // 👈 CAMBIO CRÍTICO: Usamos la versión JS para evitar crasheos en Docker
 import { v4 as uuidv4 } from 'uuid';
 
 // Configuración robusta para la base de datos
@@ -21,8 +21,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
 
   try {
     // 1. Validar que las variables de entorno llegaron bien
+    // Si esto falla, es culpa de supervisor.conf
     if (!process.env.DB_HOST) {
-        throw new Error(`Faltan variables de entorno. DB_HOST es: ${process.env.DB_HOST}`);
+        throw new Error(`CRÍTICO: Faltan variables de entorno. DB_HOST es undefined.`);
     }
 
     const { email, password } = await request.json();
@@ -31,6 +32,8 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     if (!email || !password) {
       return new Response(JSON.stringify({ message: 'Faltan datos' }), { status: 400 });
     }
+
+    console.log(`👉 Buscando usuario: ${email}`);
 
     // 3. Buscar usuario
     const userQuery = `
@@ -46,14 +49,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const user = rows[0];
 
     if (!user) {
-      return new Response(JSON.stringify({ message: 'Usuario no encontrado' }), { status: 401 });
+      console.warn("⚠️ Usuario no encontrado en BD");
+      return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
     }
 
-    // 4. Validar contraseña con bcrypt
+    // 4. Validar contraseña con bcryptjs
+    // Esto ya no dará error 500 por incompatibilidad de binarios
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     
     if (!isPasswordValid) {
-      return new Response(JSON.stringify({ message: 'Contraseña incorrecta' }), { status: 401 });
+      console.warn("⚠️ Contraseña incorrecta");
+      return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
     }
 
     // 5. Crear Sesión
@@ -84,17 +90,17 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       expires: expiresAt
     });
 
+    console.log("✅ Login Exitoso");
     return new Response(JSON.stringify({ message: 'Login exitoso' }), { status: 200 });
 
   } catch (error: any) {
-    // 🔥 ESTO ES LO QUE NECESITAMOS AHORA MISMO:
-    // Devolvemos el error real al navegador para que puedas leerlo.
-    // (En producción final quitarías el 'detail', pero para debug es vital).
-    console.error('❌ Error Login:', error);
+    // 🔥 LOG DE ERRORES:
+    // Ahora que arreglaste supervisor.conf, esto saldrá en tu pantalla de Render.
+    console.error('❌ Error Login CRÍTICO:', error);
     
     return new Response(JSON.stringify({ 
-      message: 'Error interno del servidor (Debug Mode)',
-      detail: error.message,
+      message: 'Error interno del servidor',
+      detail: error.message, // Esto te dirá el error exacto en el navegador (Network tab)
       stack: error.stack 
     }), { status: 500 });
   }
