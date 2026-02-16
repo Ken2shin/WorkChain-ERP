@@ -18,6 +18,12 @@ Thumbs.db
 # Ignorar archivos grandes o innecesarios
 go1.21.0.linux-amd64.tar.gz
 
+# ⚠️ INTEGRACIÓN: Ignorar los Dockerfiles de los subproyectos para evitar conflictos
+frontend/Dockerfile
+laravel/Dockerfile
+docker-compose.yml
+README.md
+
 # ⚠️ ¡IMPORTANTE! NO IGNORAR EL BUILD DE ASTRO
 # Comentamos estas líneas para que Docker pueda copiar el resultado del build
 # dist

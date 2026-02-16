@@ -38,24 +38,20 @@ RUN wget https://dot.net/v1/dotnet-install.sh -O /tmp/dotnet-install.sh \
 # ---------- Servicios ----------
 WORKDIR /app/services
 COPY ./services/ /app/services/
-# Creamos la carpeta para evitar error si no hay binarios aún
 RUN mkdir -p /app/services/bin_outputs
 
 
 # ==========================================
 # ETAPA 2: BUILDER FRONTEND (Astro 5)
 # ==========================================
-# Necesitamos esta etapa para compilar el Astro Server
 FROM node:20-alpine AS frontend-builder
 
 WORKDIR /app/frontend
 
 COPY ./frontend/package.json ./frontend/package-lock.json* ./frontend/pnpm-lock.yaml* ./
-# Instalamos pnpm si lo usas, si no, usa npm ci
 RUN npm install -g pnpm && pnpm install
 
 COPY ./frontend .
-# Esto genera la carpeta /app/frontend/dist
 RUN pnpm run build
 
 
@@ -104,8 +100,7 @@ RUN composer install \
 RUN mkdir -p /var/www/bin
 COPY --from=multi-builder /app/services/bin_outputs/ /var/www/bin/
 
-# 6. 🔥 COPIAMOS EL BUILD DE ASTRO (Para que Nginx lo encuentre)
-# Lo copiamos a una carpeta específica para el servidor
+# 6. COPIAMOS EL BUILD DE ASTRO
 COPY --from=frontend-builder /app/frontend/dist /var/www/astro-server
 
 # 7. Permisos y Caché
@@ -122,9 +117,9 @@ RUN mkdir -p \
 COPY ./docker/nginx.conf /etc/nginx/sites-available/default
 COPY ./docker/supervisor.conf /etc/supervisor/conf.d/laravel.conf
 
-# Render asigna puerto dinámico, pero Nginx lo manejará
+# Render asigna el puerto dinámicamente, Nginx escuchará en el 80
 EXPOSE 80
 
-# 9. ARRANQUE: Supervisor es quien levanta TODO (Nginx + PHP + Node)
-# Si usas 'php artisan serve' aquí, Astro y Nginx MORIRÁN.
+# 9. ARRANQUE: Usamos Supervisor SIEMPRE.
+# Esto lanza Nginx (80), PHP (9000) y Astro (3002) en paralelo.
 CMD ["/usr/bin/supervisord", "-c", "/etc/supervisor/conf.d/laravel.conf"]
