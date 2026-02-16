@@ -3,48 +3,36 @@ import pg from 'pg';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
-// ---------------------------------------------------------
-// 1. CONFIGURACIÓN DE CONEXIÓN SEGURA
-// ---------------------------------------------------------
-// Usamos un objeto de configuración en lugar de string para evitar
-// errores si la contraseña contiene caracteres especiales como '@'
-const dbConfig = process.env.DATABASE_URL
-  ? { connectionString: process.env.DATABASE_URL }
-  : {
-      host: process.env.DB_HOST,
-      user: process.env.DB_USERNAME,
-      password: process.env.DB_PASSWORD,
-      database: process.env.DB_DATABASE,
-      port: Number(process.env.DB_PORT) || 5432,
-    };
+// Configuración robusta para la base de datos
+const dbConfig = {
+  host: process.env.DB_HOST,
+  user: process.env.DB_USERNAME,
+  password: process.env.DB_PASSWORD,
+  database: process.env.DB_DATABASE,
+  port: Number(process.env.DB_PORT) || 5432,
+  ssl: { rejectUnauthorized: false } // Obligatorio para Render/Supabase
+};
 
-// Validamos que exista configuración mínima
-if (!dbConfig.connectionString && !dbConfig.host) {
-  console.error("❌ [FATAL] No se encontraron variables de conexión a la Base de Datos.");
-}
+// Crear el pool fuera del handler para reutilizar conexiones
+const pool = new pg.Pool(dbConfig);
 
-const pool = new pg.Pool({
-  ...dbConfig,
-  ssl: { rejectUnauthorized: false } // Necesario para Render/Supabase
-});
-
-// ---------------------------------------------------------
-// 2. ENDPOINT DE LOGIN
-// ---------------------------------------------------------
 export const POST: APIRoute = async ({ request, cookies }) => {
-  console.log("👉 [Login API] Procesando solicitud...");
+  console.log("👉 [Login API] Iniciando solicitud...");
 
   try {
-    const { email, password } = await request.json();
-
-    // Validación de campos
-    if (!email || !password) {
-      return new Response(JSON.stringify({ message: 'Faltan correo o contraseña' }), { status: 400 });
+    // 1. Validar que las variables de entorno llegaron bien
+    if (!process.env.DB_HOST) {
+        throw new Error(`Faltan variables de entorno. DB_HOST es: ${process.env.DB_HOST}`);
     }
 
-    console.log(`👉 [Login API] Buscando: ${email}`);
-    
-    // Consulta para obtener usuario y tenant
+    const { email, password } = await request.json();
+
+    // 2. Validación básica
+    if (!email || !password) {
+      return new Response(JSON.stringify({ message: 'Faltan datos' }), { status: 400 });
+    }
+
+    // 3. Buscar usuario
     const userQuery = `
       SELECT u.*, t.id as tenant_id 
       FROM public.users u
@@ -53,28 +41,25 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       LIMIT 1
     `;
     
+    // Intentamos la consulta
     const { rows } = await pool.query(userQuery, [email]);
     const user = rows[0];
 
-    // Verificar si el usuario existe
     if (!user) {
-      console.warn(`⚠️ Usuario no encontrado: ${email}`);
-      return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
+      return new Response(JSON.stringify({ message: 'Usuario no encontrado' }), { status: 401 });
     }
 
-    // Validar contraseña
+    // 4. Validar contraseña con bcrypt
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     
     if (!isPasswordValid) {
-      console.warn(`⚠️ Contraseña incorrecta: ${email}`);
-      return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
+      return new Response(JSON.stringify({ message: 'Contraseña incorrecta' }), { status: 401 });
     }
 
-    // Crear ID de sesión
+    // 5. Crear Sesión
     const sessionId = uuidv4();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 horas
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); 
 
-    // Guardar sesión en BD
     const sessionQuery = `
       INSERT INTO public.sessions (id, user_id, tenant_id, ip_address, user_agent, payload, expires_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -90,7 +75,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       expiresAt
     ]);
 
-    // Establecer Cookie segura
+    // 6. Cookie
     cookies.set('workchain_session', sessionId, {
       path: '/',
       httpOnly: true,
@@ -99,14 +84,18 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       expires: expiresAt
     });
 
-    console.log("✅ Login exitoso");
-    return new Response(JSON.stringify({ message: 'Bienvenido a WorkChain' }), { status: 200 });
+    return new Response(JSON.stringify({ message: 'Login exitoso' }), { status: 200 });
 
   } catch (error: any) {
-    console.error('❌ [Login API Error]:', error);
+    // 🔥 ESTO ES LO QUE NECESITAMOS AHORA MISMO:
+    // Devolvemos el error real al navegador para que puedas leerlo.
+    // (En producción final quitarías el 'detail', pero para debug es vital).
+    console.error('❌ Error Login:', error);
+    
     return new Response(JSON.stringify({ 
-      message: 'Error interno del servidor',
-      detail: error.message 
+      message: 'Error interno del servidor (Debug Mode)',
+      detail: error.message,
+      stack: error.stack 
     }), { status: 500 });
   }
 };
