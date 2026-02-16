@@ -12,106 +12,109 @@ use Firebase\JWT\ExpiredException;
 class JWTService
 {
     private string $secret;
-    private string $algorithm = 'HS256'; // Para mayor seguridad, considera RS256 (Claves asimétricas)
+    private string $algorithm;
 
     public function __construct()
     {
-        // 1. SEGURIDAD: Cargar desde config(), nunca env().
-        // Si la clave no existe o es débil, detenemos la ejecución inmediatamente.
         $this->secret = config('jwt.secret');
+        $this->algorithm = config('jwt.algorithm', 'HS256');
 
         if (empty($this->secret) || strlen($this->secret) < 32) {
-            throw new RuntimeException('CRITICAL: JWT_SECRET is missing or too short (min 32 chars).');
+            throw new RuntimeException(
+                'JWT_SECRET is missing or insecure (minimum 32 characters required).'
+            );
         }
     }
 
     /**
-     * Genera un token de acceso vinculado estrictamente a un Usuario y una Organización.
-     * Esto soluciona tu problema de filtrado.
+     * ACCESS TOKEN (15 min)
      */
-    public function issueUserToken(int|string $userId, string $tenantId, array $customClaims = []): string
-    {
-        // Forzamos la estructura del Payload para garantizar el aislamiento
+    public function issueUserToken(
+        int|string $userId,
+        int|string $tenantId,
+        array $customClaims = []
+    ): string {
         $payload = array_merge($customClaims, [
-            'sub'       => (string) $userId,   // Subject (Quién es)
-            'tenant_id' => $tenantId,          // Context (Dónde está) <--- CRÍTICO
-            'jti'       => Str::uuid()->toString(), // Unique Token ID (Previene replay attacks)
+            'sub'       => (string) $userId,
+            'tenant_id' => (string) $tenantId,
+            'jti'       => Str::uuid()->toString(),
+            'type'      => 'access',
         ]);
 
-        // 15 minutos de vida para Access Tokens (Seguridad Brutal requiere rotación rápida)
-        return $this->generateRawToken($payload, 15);
+        return $this->generateRawToken(
+            $payload,
+            config('jwt.access_expiration', 15)
+        );
     }
 
     /**
-     * Genera un Refresh Token de larga duración.
+     * REFRESH TOKEN (7 días)
      */
-    public function issueRefreshToken(int|string $userId, string $tenantId): string
-    {
-        $payload = [
+    public function issueRefreshToken(
+        int|string $userId,
+        int|string $tenantId
+    ): string {
+        return $this->generateRawToken([
             'sub'       => (string) $userId,
-            'tenant_id' => $tenantId,
-            'type'      => 'refresh', // Marca explícita para no confundirlo con access token
+            'tenant_id' => (string) $tenantId,
+            'type'      => 'refresh',
             'jti'       => Str::uuid()->toString(),
-        ];
-
-        return $this->generateRawToken($payload, 10080); // 7 días
+        ], config('jwt.refresh_expiration', 10080));
     }
 
     /**
-     * Verifica y decodifica el token. Lanza excepciones específicas.
+     * Verificación segura del token
      */
     public function verifyToken(string $token): array
     {
         try {
-            // Añadimos un "leeway" de 10 segundos por si hay desajuste de reloj entre servidores
-            JWT::$leeway = 10; 
-            
-            $decoded = JWT::decode($token, new Key($this->secret, $this->algorithm));
+            JWT::$leeway = 10;
+
+            $decoded = JWT::decode(
+                $token,
+                new Key($this->secret, $this->algorithm)
+            );
+
             $payload = (array) $decoded;
 
-            // Validación Estructural: Si no tiene tenant_id, el token es basura.
-            if (!isset($payload['tenant_id']) || empty($payload['tenant_id'])) {
-                throw new UnexpectedValueException('Token missing Organization Context (tenant_id).');
+            if (empty($payload['tenant_id'])) {
+                throw new UnexpectedValueException('Token missing tenant context.');
             }
 
             return $payload;
 
-        } catch (ExpiredException $e) {
-            // Puedes loguear esto si quieres auditoría de sesiones expiradas
-            throw new \App\Exceptions\Auth\TokenExpiredException('Session expired.');
-        } catch (\Exception $e) {
-            throw new \App\Exceptions\Auth\InvalidTokenException('Invalid token signature or structure.');
+        } catch (ExpiredException) {
+            throw new RuntimeException('Token expired.');
+        } catch (\Throwable) {
+            throw new RuntimeException('Invalid token.');
         }
     }
 
     /**
-     * Generación interna de bajo nivel.
+     * Token builder interno
      */
     private function generateRawToken(array $payload, int $expirationMinutes): string
     {
-        $issuedAt = time();
-        $expire = $issuedAt + ($expirationMinutes * 60);
+        $now = time();
 
-        $payload['iat'] = $issuedAt; // Issued At
-        $payload['nbf'] = $issuedAt; // Not Before (Válido desde ya)
-        $payload['exp'] = $expire;   // Expiration
-
-        return JWT::encode($payload, $this->secret, $this->algorithm);
+        return JWT::encode(array_merge($payload, [
+            'iat' => $now,
+            'nbf' => $now,
+            'exp' => $now + ($expirationMinutes * 60),
+        ]), $this->secret, $this->algorithm);
     }
 
     /**
-     * Extrae el token del header Authorization con validación robusta.
+     * Extraer Bearer Token
      */
     public function extractTokenFromHeader(?string $header): ?string
     {
-        if (empty($header)) {
+        if (!$header) {
             return null;
         }
 
-        if (preg_match('/Bearer\s+(\S+)/', $header, $matches)) {
-            return $matches[1];
-        }
-
-        return null;
+        return preg_match('/Bearer\s+(\S+)/', $header, $m)
+            ? $m[1]
+            : null;
     }
 }
