@@ -3,33 +3,61 @@ import pg from 'pg';
 import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
-// Configuración de la base de datos
-// Nota: Se usará la variable que pasamos explícitamente en supervisor.conf
+// ---------------------------------------------------------
+// 1. CONSTRUCCIÓN ROBUSTA DE LA CONEXIÓN A BD
+// ---------------------------------------------------------
+const getConnectionString = () => {
+  // Si Render nos da la URL completa, la usamos
+  if (process.env.DATABASE_URL) {
+    return process.env.DATABASE_URL;
+  }
+
+  // Si no, la construimos con tus variables desglosadas
+  const host = process.env.DB_HOST;
+  const user = process.env.DB_USERNAME;
+  const pass = process.env.DB_PASSWORD;
+  const name = process.env.DB_DATABASE;
+  const port = process.env.DB_PORT || 5432;
+
+  if (host && user && pass && name) {
+    return `postgres://${user}:${pass}@${host}:${port}/${name}`;
+  }
+  
+  return null;
+};
+
+const connectionString = getConnectionString();
+
+// Validamos antes de crear el Pool para que el error sea claro en los logs
+if (!connectionString) {
+  console.error("❌ [FATAL] No se encontraron variables de conexión a la Base de Datos.");
+}
+
 const pool = new pg.Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false } // Requerido para Render/Supabase
+  connectionString: connectionString || undefined,
+  ssl: { rejectUnauthorized: false } // Necesario para Supabase/Render
 });
 
+// ---------------------------------------------------------
+// 2. ENDPOINT DE LOGIN
+// ---------------------------------------------------------
 export const POST: APIRoute = async ({ request, cookies }) => {
-  console.log("👉 [Login API] Iniciando intento de login...");
+  console.log("👉 [Login API] Procesando solicitud...");
 
   try {
-    // 0. Validación de entorno crítica
-    if (!process.env.DATABASE_URL) {
-      console.error("❌ [Login API] ERROR FATAL: DATABASE_URL no está definida.");
-      throw new Error("Error de configuración del servidor: Base de datos no vinculada.");
+    if (!connectionString) {
+      throw new Error("Error de configuración: Base de datos no conectada.");
     }
 
     const { email, password } = await request.json();
 
-    // 1. Validación básica de entrada
+    // Validación de campos
     if (!email || !password) {
-      return new Response(JSON.stringify({ message: 'Campos requeridos faltantes' }), { status: 400 });
+      return new Response(JSON.stringify({ message: 'Faltan correo o contraseña' }), { status: 400 });
     }
 
-    console.log(`👉 [Login API] Buscando usuario: ${email}`);
-
-    // 2. Buscar usuario y su organización (Tenant)
+    // Buscar usuario y tenant
+    console.log(`👉 [Login API] Buscando: ${email}`);
     const userQuery = `
       SELECT u.*, t.id as tenant_id 
       FROM public.users u
@@ -41,23 +69,24 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const { rows } = await pool.query(userQuery, [email]);
     const user = rows[0];
 
-    // 3. Verificación de seguridad
+    // Verificar usuario
     if (!user) {
-      console.warn(`⚠️ [Login API] Usuario no encontrado o inactivo: ${email}`);
+      console.warn(`⚠️ Usuario no encontrado: ${email}`);
       return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
     }
 
-    // 4. Validar contraseña
+    // Validar contraseña
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     
     if (!isPasswordValid) {
-      console.warn(`⚠️ [Login API] Contraseña incorrecta para: ${email}`);
+      console.warn(`⚠️ Contraseña incorrecta: ${email}`);
       return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
     }
 
-    // 5. Crear Sesión
+    // Crear Sesión
     const sessionId = uuidv4();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 horas
+    // 24 horas de expiración
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); 
 
     const sessionQuery = `
       INSERT INTO public.sessions (id, user_id, tenant_id, ip_address, user_agent, payload, expires_at)
@@ -70,29 +99,27 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       user.tenant_id,
       request.headers.get('x-forwarded-for') || '127.0.0.1',
       request.headers.get('user-agent') || 'unknown',
-      Buffer.from(JSON.stringify({ role: user.role })),
+      Buffer.from(JSON.stringify({ role: user.role })), 
       expiresAt
     ]);
 
-    // 6. Establecer Cookie
+    // Cookie segura
     cookies.set('workchain_session', sessionId, {
       path: '/',
       httpOnly: true,
-      secure: true,
+      secure: true, // Render usa HTTPS
       sameSite: 'strict',
       expires: expiresAt
     });
 
-    console.log(`✅ [Login API] Login exitoso para: ${email}`);
-    return new Response(JSON.stringify({ message: 'Login exitoso' }), { status: 200 });
+    console.log("✅ Login exitoso");
+    return new Response(JSON.stringify({ message: 'Bienvenido a WorkChain' }), { status: 200 });
 
   } catch (error: any) {
-    // Este log aparecerá en la consola de Render si ocurre un error 500
-    console.error('❌ [Login API] Excepción no controlada:', error);
-    
+    console.error('❌ [Login API Error]:', error);
     return new Response(JSON.stringify({ 
       message: 'Error interno del servidor',
-      debug: error.message // Útil para desarrollo, quítalo en producción final
+      detail: error.message 
     }), { status: 500 });
   }
 };
