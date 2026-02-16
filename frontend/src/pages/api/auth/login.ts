@@ -1,41 +1,52 @@
 import type { APIRoute } from 'astro';
-import pg from 'pg';
-import bcrypt from 'bcryptjs'; // 👈 CAMBIO CRÍTICO: Usamos la versión JS para evitar crasheos en Docker
+// 👇 CAMBIO CRÍTICO: Forma compatible de importar Postgres en Producción (Docker/Node)
+import pkg from 'pg'; 
+const { Pool } = pkg; 
+
+import bcrypt from 'bcryptjs';
 import { v4 as uuidv4 } from 'uuid';
 
-// Configuración robusta para la base de datos
+// Configuración de conexión
 const dbConfig = {
   host: process.env.DB_HOST,
   user: process.env.DB_USERNAME,
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
   port: Number(process.env.DB_PORT) || 5432,
-  ssl: { rejectUnauthorized: false } // Obligatorio para Render/Supabase
+  // IMPORTANTE: rejectUnauthorized en false es vital para Render/Supabase
+  ssl: { rejectUnauthorized: false } 
 };
 
-// Crear el pool fuera del handler para reutilizar conexiones
-const pool = new pg.Pool(dbConfig);
+// Inicializamos el Pool
+let pool: any;
+try {
+  pool = new Pool(dbConfig);
+} catch (e) {
+  console.error("🔥 Error FATAL al iniciar Pool de DB:", e);
+}
 
 export const POST: APIRoute = async ({ request, cookies }) => {
-  console.log("👉 [Login API] Iniciando solicitud...");
+  console.log("👉 [Login API] Solicitud recibida (Protocolo seguro)");
 
   try {
-    // 1. Validar que las variables de entorno llegaron bien
-    // Si esto falla, es culpa de supervisor.conf
+    // 1. Check de Seguridad Inicial
+    if (!pool) {
+        throw new Error("El Pool de Base de Datos no se pudo iniciar. Revisa las variables de entorno.");
+    }
     if (!process.env.DB_HOST) {
-        throw new Error(`CRÍTICO: Faltan variables de entorno. DB_HOST es undefined.`);
+        throw new Error("Faltan variables de entorno (DB_HOST undefined).");
     }
 
     const { email, password } = await request.json();
 
-    // 2. Validación básica
+    // 2. Validación de Inputs
     if (!email || !password) {
       return new Response(JSON.stringify({ message: 'Faltan datos' }), { status: 400 });
     }
 
-    console.log(`👉 Buscando usuario: ${email}`);
+    console.log(`👉 Intentando login para: ${email}`);
 
-    // 3. Buscar usuario
+    // 3. Consulta a la Base de Datos
     const userQuery = `
       SELECT u.*, t.id as tenant_id 
       FROM public.users u
@@ -44,27 +55,27 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       LIMIT 1
     `;
     
-    // Intentamos la consulta
+    // Aquí es donde solía fallar si la importación estaba mal
     const { rows } = await pool.query(userQuery, [email]);
     const user = rows[0];
 
+    // 4. Verificación de Usuario
     if (!user) {
-      console.warn("⚠️ Usuario no encontrado en BD");
+      console.warn(`⚠️ Usuario no encontrado: ${email}`);
       return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
     }
 
-    // 4. Validar contraseña con bcryptjs
-    // Esto ya no dará error 500 por incompatibilidad de binarios
+    // 5. Verificación de Password
     const isPasswordValid = await bcrypt.compare(password, user.password_hash);
     
     if (!isPasswordValid) {
-      console.warn("⚠️ Contraseña incorrecta");
+      console.warn(`⚠️ Password incorrecto para: ${email}`);
       return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
     }
 
-    // 5. Crear Sesión
+    // 6. Generar Sesión
     const sessionId = uuidv4();
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); 
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 horas
 
     const sessionQuery = `
       INSERT INTO public.sessions (id, user_id, tenant_id, ip_address, user_agent, payload, expires_at)
@@ -81,27 +92,26 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       expiresAt
     ]);
 
-    // 6. Cookie
+    // 7. Setear Cookie
     cookies.set('workchain_session', sessionId, {
       path: '/',
       httpOnly: true,
-      secure: true,
+      secure: true, // Render usa HTTPS, así que esto es correcto
       sameSite: 'strict',
       expires: expiresAt
     });
 
-    console.log("✅ Login Exitoso");
+    console.log("✅ Login Exitoso. Redirigiendo...");
     return new Response(JSON.stringify({ message: 'Login exitoso' }), { status: 200 });
 
   } catch (error: any) {
-    // 🔥 LOG DE ERRORES:
-    // Ahora que arreglaste supervisor.conf, esto saldrá en tu pantalla de Render.
-    console.error('❌ Error Login CRÍTICO:', error);
+    // 🔥 LOG CRÍTICO: Esto aparecerá en el log de Render
+    console.error('❌ ERROR 500 REAL:', error);
     
     return new Response(JSON.stringify({ 
       message: 'Error interno del servidor',
-      detail: error.message, // Esto te dirá el error exacto en el navegador (Network tab)
-      stack: error.stack 
+      // Este detalle te dirá en el navegador QUÉ pasó realmente
+      detail: error.message || error.toString() 
     }), { status: 500 });
   }
 };
