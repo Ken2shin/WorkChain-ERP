@@ -2,67 +2,80 @@
 
 namespace App\Models;
 
-// Traits de Laravel y Seguridad
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
-use Laravel\Sanctum\HasApiTokens; // Recomendado para API/ERP
-use App\Traits\BelongsToTenant;   // <--- CRÍTICO: Tu filtro de seguridad
+use App\Traits\BelongsToTenant;
 
 class User extends Authenticatable
 {
-    /* * INYECCIÓN DE SEGURIDAD:
-     * 'BelongsToTenant' asegura que NUNCA se consulte un usuario
-     * fuera del tenant actual (evita cruce de datos en Login).
+    /**
+     * Traits críticos:
+     * - HasFactory: factories
+     * - Notifiable: notificaciones
+     * - BelongsToTenant: aislamiento total por tenant
      */
-    use HasApiTokens, HasFactory, Notifiable, BelongsToTenant;
+    use HasFactory, Notifiable, BelongsToTenant;
 
-    // SEGURIDAD: Solo permitir editar estos campos explícitamente.
-    // Jamás permitir que 'tenant_id' o 'role' se inyecten sin control.
+    /**
+     * Campos editables explícitos
+     * ⚠️ NO permitir mass assignment accidental
+     */
     protected $fillable = [
         'name',
         'email',
         'password',
         'is_active',
-        'role',         // Validar estrictamente en el Controller/Request
-        'tenant_id',    // Validar que coincida con el contexto
+        'role',
+        'tenant_id',
         'permissions',
         'requires_2fa',
         'last_login_at',
-        'last_ip_address'
+        'last_ip_address',
     ];
 
+    /**
+     * Campos ocultos SIEMPRE
+     */
     protected $hidden = [
         'password',
         'remember_token',
-        '2fa_secret',
+        'two_factor_secret',
     ];
 
+    /**
+     * Casts seguros y explícitos
+     */
     protected $casts = [
         'email_verified_at' => 'datetime',
         'last_login_at'     => 'datetime',
         'is_active'         => 'boolean',
         'requires_2fa'      => 'boolean',
         'permissions'       => 'array',
-        'password'          => 'hashed', // Laravel 10+: Hasheo automático seguro
+        'password'          => 'hashed',
     ];
 
-    // --- Relaciones ---
+    /* =====================================================
+     | RELACIONES
+     ===================================================== */
 
     public function tenant(): BelongsTo
     {
         return $this->belongsTo(Tenant::class);
     }
 
-    // --- Métodos de Lógica de Negocio ---
+    /* =====================================================
+     | AUTORIZACIÓN Y PERMISOS
+     ===================================================== */
 
     /**
-     * Verifica permisos con jerarquía (Admin tiene todo).
+     * Verifica permiso específico
+     * - Admin tiene acceso total
+     * - Usuario inactivo NO tiene permisos
      */
     public function hasPermission(string $permission): bool
     {
-        // Fail-safe: Si el usuario está desactivado, no tiene permisos.
         if (!$this->is_active) {
             return false;
         }
@@ -71,8 +84,7 @@ class User extends Authenticatable
             return true;
         }
 
-        $permissions = $this->permissions ?? [];
-        return in_array($permission, $permissions, true);
+        return in_array($permission, $this->permissions ?? [], true);
     }
 
     public function isAdmin(): bool
@@ -82,20 +94,31 @@ class User extends Authenticatable
 
     public function isManager(): bool
     {
-        return $this->role === 'manager' || $this->isAdmin();
+        return in_array($this->role, ['manager', 'admin'], true);
     }
 
-    public function updateLastLogin(string $ip = null): void
+    /* =====================================================
+     | AUDITORÍA Y SEGURIDAD
+     ===================================================== */
+
+    /**
+     * Registra login seguro
+     */
+    public function updateLastLogin(?string $ip = null): void
     {
-        $this->update([
-            'last_login_at' => now(),
-            'last_ip_address' => $ip // Útil para auditoría de seguridad
-        ]);
+        $this->forceFill([
+            'last_login_at'   => now(),
+            'last_ip_address' => $ip,
+        ])->save();
     }
 
-    // --- Configuración del Trait BelongsToTenant ---
+    /* =====================================================
+     | MULTI-TENANCY (CRÍTICO)
+     ===================================================== */
 
-    // Define explícitamente la columna para evitar ambigüedades
+    /**
+     * Evita ambigüedad en el trait BelongsToTenant
+     */
     public function getTenantIdColumn(): string
     {
         return 'tenant_id';
