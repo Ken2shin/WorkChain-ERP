@@ -4,38 +4,28 @@ import bcrypt from 'bcrypt';
 import { v4 as uuidv4 } from 'uuid';
 
 // ---------------------------------------------------------
-// 1. CONSTRUCCIÓN ROBUSTA DE LA CONEXIÓN A BD
+// 1. CONFIGURACIÓN DE CONEXIÓN SEGURA
 // ---------------------------------------------------------
-const getConnectionString = () => {
-  // Si Render nos da la URL completa, la usamos
-  if (process.env.DATABASE_URL) {
-    return process.env.DATABASE_URL;
-  }
+// Usamos un objeto de configuración en lugar de string para evitar
+// errores si la contraseña contiene caracteres especiales como '@'
+const dbConfig = process.env.DATABASE_URL
+  ? { connectionString: process.env.DATABASE_URL }
+  : {
+      host: process.env.DB_HOST,
+      user: process.env.DB_USERNAME,
+      password: process.env.DB_PASSWORD,
+      database: process.env.DB_DATABASE,
+      port: Number(process.env.DB_PORT) || 5432,
+    };
 
-  // Si no, la construimos con tus variables desglosadas
-  const host = process.env.DB_HOST;
-  const user = process.env.DB_USERNAME;
-  const pass = process.env.DB_PASSWORD;
-  const name = process.env.DB_DATABASE;
-  const port = process.env.DB_PORT || 5432;
-
-  if (host && user && pass && name) {
-    return `postgres://${user}:${pass}@${host}:${port}/${name}`;
-  }
-  
-  return null;
-};
-
-const connectionString = getConnectionString();
-
-// Validamos antes de crear el Pool para que el error sea claro en los logs
-if (!connectionString) {
+// Validamos que exista configuración mínima
+if (!dbConfig.connectionString && !dbConfig.host) {
   console.error("❌ [FATAL] No se encontraron variables de conexión a la Base de Datos.");
 }
 
 const pool = new pg.Pool({
-  connectionString: connectionString || undefined,
-  ssl: { rejectUnauthorized: false } // Necesario para Supabase/Render
+  ...dbConfig,
+  ssl: { rejectUnauthorized: false } // Necesario para Render/Supabase
 });
 
 // ---------------------------------------------------------
@@ -45,10 +35,6 @@ export const POST: APIRoute = async ({ request, cookies }) => {
   console.log("👉 [Login API] Procesando solicitud...");
 
   try {
-    if (!connectionString) {
-      throw new Error("Error de configuración: Base de datos no conectada.");
-    }
-
     const { email, password } = await request.json();
 
     // Validación de campos
@@ -56,8 +42,9 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ message: 'Faltan correo o contraseña' }), { status: 400 });
     }
 
-    // Buscar usuario y tenant
     console.log(`👉 [Login API] Buscando: ${email}`);
+    
+    // Consulta para obtener usuario y tenant
     const userQuery = `
       SELECT u.*, t.id as tenant_id 
       FROM public.users u
@@ -69,7 +56,7 @@ export const POST: APIRoute = async ({ request, cookies }) => {
     const { rows } = await pool.query(userQuery, [email]);
     const user = rows[0];
 
-    // Verificar usuario
+    // Verificar si el usuario existe
     if (!user) {
       console.warn(`⚠️ Usuario no encontrado: ${email}`);
       return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
@@ -83,11 +70,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       return new Response(JSON.stringify({ message: 'Credenciales inválidas' }), { status: 401 });
     }
 
-    // Crear Sesión
+    // Crear ID de sesión
     const sessionId = uuidv4();
-    // 24 horas de expiración
-    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); 
+    const expiresAt = new Date(Date.now() + 1000 * 60 * 60 * 24); // 24 horas
 
+    // Guardar sesión en BD
     const sessionQuery = `
       INSERT INTO public.sessions (id, user_id, tenant_id, ip_address, user_agent, payload, expires_at)
       VALUES ($1, $2, $3, $4, $5, $6, $7)
@@ -103,11 +90,11 @@ export const POST: APIRoute = async ({ request, cookies }) => {
       expiresAt
     ]);
 
-    // Cookie segura
+    // Establecer Cookie segura
     cookies.set('workchain_session', sessionId, {
       path: '/',
       httpOnly: true,
-      secure: true, // Render usa HTTPS
+      secure: true,
       sameSite: 'strict',
       expires: expiresAt
     });
