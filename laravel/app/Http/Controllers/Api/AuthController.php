@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Api\ApiController; // Aseguramos herencia correcta
+// Extendemos del ApiController que acabamos de definir arriba
+use App\Http\Controllers\Api\ApiController; 
 use App\Models\User;
 use App\Models\Tenant;
 use App\Services\JWTService;
@@ -24,12 +25,11 @@ class AuthController extends ApiController
     }
 
     /**
-     * Login unificado y robusto.
-     * Soporta login con o sin tenant_id explícito.
+     * Login Unificado (Soporta tenant_id opcional)
      */
     public function login(Request $request)
     {
-        // 1. Validación combinada (Acepta tenant_id opcional como en el Código A)
+        // 1. Validamos los datos de entrada
         $validated = $request->validate([
             'email'     => 'required|email|max:255',
             'password'  => 'required|min:8',
@@ -37,28 +37,26 @@ class AuthController extends ApiController
         ]);
 
         try {
-            // 2. Búsqueda del usuario ignorando el Global Scope de Tenant
-            // Usamos withoutGlobalScopes() que es el método nativo de Laravel
+            // 2. Buscamos al usuario (ignorando filtros de tenant para poder encontrarlo)
             $query = User::withoutGlobalScopes();
 
             if (!empty($validated['tenant_id'])) {
-                // Si el request trae tenant_id, filtramos específicamente
+                // Si enviaron tenant_id, somos específicos
                 $user = $query->where('email', $validated['email'])
                               ->where('tenant_id', $validated['tenant_id'])
                               ->first();
             } else {
-                // Si no trae tenant_id, buscamos solo por email (Lógica Código B)
+                // Si no, buscamos por email globalmente
                 $user = $query->where('email', $validated['email'])->first();
             }
 
-            // 3. Verificación de existencia
+            // 3. Verificamos si existe
             if (!$user) {
                 $this->auditLogger->logLoginAttempt($validated['email'], false, 'user_not_found', $request->ip());
                 return $this->unauthorized('Invalid credentials');
             }
 
-            // 4. Verificación de estado (Compatibilidad con ambos códigos: boolean o string)
-            // Asumimos que si is_active es false O status no es 'active', la cuenta está inactiva
+            // 4. Verificamos si está activo (compatible con boolean y string)
             $isInactive = (isset($user->is_active) && !$user->is_active) || 
                           (isset($user->status) && $user->status !== 'active');
 
@@ -67,75 +65,64 @@ class AuthController extends ApiController
                 return $this->unauthorized('Account is inactive');
             }
 
-            // 5. Verificación de contraseña segura
+            // 5. Verificamos contraseña
             if (!Hash::check($validated['password'], $user->password)) {
                 $this->auditLogger->logLoginAttempt($validated['email'], false, 'invalid_password', $request->ip());
                 return $this->unauthorized('Invalid credentials');
             }
 
-            // 6. Inyección de contexto Tenant (Vital para el resto del request)
+            // 6. Configuración de contexto (Vital para Multi-tenancy)
             app()->instance('tenant_id', $user->tenant_id);
 
-            // 7. Generación de Tokens
+            // 7. Generar Tokens
             $accessToken = $this->jwtService->generateToken([
                 'user_id'   => $user->id,
                 'tenant_id' => $user->tenant_id,
                 'email'     => $user->email,
                 'role'      => $user->role,
-            ], config('api-security.jwt.expiration_minutes'));
+            ], config('api-security.jwt.expiration_minutes', 60));
 
             $refreshToken = $this->jwtService->generateRefreshToken([
                 'user_id'   => $user->id,
                 'tenant_id' => $user->tenant_id,
             ]);
 
-            // Actualizar último login si el método existe (Seguridad Código B)
+            // Actualizar último acceso
             if (method_exists($user, 'updateLastLogin')) {
-                $user->updateLastLogin();
+                $user->updateLastLogin($request->ip());
             }
 
-            // 8. Log de éxito
+            // 8. Log de auditoría
             $this->auditLogger->logLoginAttempt($validated['email'], true, 'success', $request->ip());
 
-            // 9. Retorno de respuesta JSON estricta (Headers de seguridad del Código A)
-            return response()->json([
-                'success' => true,
-                'message' => 'Login successful',
-                'data' => [
-                    'user' => [
-                        'id'        => $user->id,
-                        'name'      => $user->name,
-                        'email'     => $user->email,
-                        'role'      => $user->role,
-                        'tenant_id' => $user->tenant_id,
-                    ],
-                    'access_token'  => $accessToken,
-                    'refresh_token' => $refreshToken,
-                    'expires_in'    => config('api-security.jwt.expiration_minutes') * 60,
-                ]
-            ], 200, [
-                'Content-Type' => 'application/json',
-                'X-Content-Type-Options' => 'nosniff',
-                'X-Frame-Options' => 'DENY',
-            ]);
+            // 9. Respuesta exitosa usando el método del padre
+            return $this->success([
+                'user' => [
+                    'id'        => $user->id,
+                    'name'      => $user->name,
+                    'email'     => $user->email,
+                    'role'      => $user->role,
+                    'tenant_id' => $user->tenant_id,
+                ],
+                'access_token'  => $accessToken,
+                'refresh_token' => $refreshToken,
+                'expires_in'    => config('api-security.jwt.expiration_minutes', 60) * 60,
+            ], 'Login successful');
 
-        } catch (\Throwable $e) { // Usamos Throwable para capturar errores fatales también (Código B)
+        } catch (\Throwable $e) {
+            // Captura de errores fatales
             Log::error('Login error', [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
                 'ip'    => $request->ip(),
             ]);
 
-            return response()->json([
-                'success' => false,
-                'message' => 'Authentication failed',
-                'data'    => null
-            ], 500, ['Content-Type' => 'application/json']);
+            return $this->error('Authentication failed', null, 500);
         }
     }
 
     /**
-     * Registro de usuarios (Del Código A - Funcionalidad completa)
+     * Registro de Usuarios
      */
     public function register(Request $request)
     {
@@ -146,12 +133,13 @@ class AuthController extends ApiController
             'tenant_code' => 'required|string',
         ]);
 
+        // Buscar tenant por código
         $tenant = Tenant::where('slug', $validated['tenant_code'])
             ->where('is_active', true)
             ->first();
 
         if (!$tenant) {
-            return $this->error('Tenant not found', null, 404);
+            return $this->notFound('Tenant not found');
         }
 
         try {
@@ -161,8 +149,8 @@ class AuthController extends ApiController
                 'password'  => Hash::make($validated['password']),
                 'tenant_id' => $tenant->id,
                 'role'      => 'user',
-                'is_active' => false, // Requiere aprobación
-                'status'    => 'pending', // Añadido para compatibilidad con ambos esquemas
+                'is_active' => false, 
+                'status'    => 'pending',
             ]);
 
             $this->auditLogger->logAction('user_registered', 'user', $user->id);
@@ -179,7 +167,7 @@ class AuthController extends ApiController
     }
 
     /**
-     * Refrescar Token (Del Código A - Funcionalidad completa)
+     * Refrescar Token
      */
     public function refresh(Request $request)
     {
@@ -195,16 +183,11 @@ class AuthController extends ApiController
 
         $user = User::withoutGlobalScopes()->find($payload['user_id']);
 
-        // Verificación de estado robusta
-        $isInactive = !$user || 
-                      (isset($user->is_active) && !$user->is_active) || 
-                      (isset($user->status) && $user->status !== 'active');
-
-        if ($isInactive) {
+        if (!$user || (isset($user->is_active) && !$user->is_active)) {
             return $this->unauthorized('User not found or inactive');
         }
 
-        // Re-inyectar tenant para seguridad
+        // Re-inyectar tenant
         app()->instance('tenant_id', $user->tenant_id);
 
         $newAccessToken = $this->jwtService->generateToken([
@@ -212,7 +195,7 @@ class AuthController extends ApiController
             'tenant_id' => $user->tenant_id,
             'email'     => $user->email,
             'role'      => $user->role,
-        ], 24 * 60); // Asumimos 24 horas si no está en config
+        ], 24 * 60); 
 
         return $this->success([
             'access_token' => $newAccessToken,
@@ -220,25 +203,19 @@ class AuthController extends ApiController
         ], 'Token refreshed');
     }
 
-    /**
-     * Logout (Del Código A)
-     */
     public function logout(Request $request)
     {
         $this->auditLogger->logAction('logout', 'auth', null);
         return $this->success(null, 'Logout successful');
     }
 
-    /**
-     * Obtener usuario actual (Del Código A)
-     */
     public function me(Request $request)
     {
-        if (!$request->user()) {
-            return $this->unauthorized('Not authenticated');
-        }
-
         $user = $request->user();
+
+        if (!$user) {
+            return $this->unauthorized();
+        }
 
         return $this->success([
             'id'          => $user->id,
@@ -246,7 +223,7 @@ class AuthController extends ApiController
             'email'       => $user->email,
             'role'        => $user->role,
             'tenant_id'   => $user->tenant_id,
-            'permissions' => $user->permissions ?? [], // Null coalescing por seguridad
+            'permissions' => $user->permissions ?? [],
         ]);
     }
 }

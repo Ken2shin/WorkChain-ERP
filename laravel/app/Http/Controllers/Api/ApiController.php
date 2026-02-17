@@ -2,21 +2,28 @@
 
 namespace App\Http\Controllers\Api;
 
-use App\Http\Controllers\Controller;
+// Importamos el controlador base de Laravel correctamente
+use App\Http\Controllers\Controller as BaseController;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 
-class ApiController extends Controller
+class ApiController extends BaseController
 {
+    /**
+     * Respuesta de Éxito Estándar
+     */
     protected function success($data = null, string $message = 'Success', int $code = 200): JsonResponse
     {
         return response()->json([
             'success' => true,
             'message' => $message,
-            'data' => $data,
+            'data'    => $data,
         ], $code);
     }
 
+    /**
+     * Respuesta de Error Estándar
+     */
     protected function error(string $message = 'Error', $errors = null, int $code = 400): JsonResponse
     {
         $response = [
@@ -31,6 +38,9 @@ class ApiController extends Controller
         return response()->json($response, $code);
     }
 
+    /**
+     * Helpers rápidos para códigos HTTP comunes
+     */
     protected function notFound(string $message = 'Resource not found'): JsonResponse
     {
         return $this->error($message, null, 404);
@@ -47,13 +57,8 @@ class ApiController extends Controller
     }
 
     /**
-     * Safe custom validator (no collision with Laravel)
+     * Validador seguro que devuelve JSON automáticamente si falla
      */
-    protected function validateData(array $data, array $rules): array
-    {
-        return Validator::make($data, $rules)->validate();
-    }
-
     protected function validateDataOrFail(array $data, array $rules): JsonResponse|array
     {
         $validator = Validator::make($data, $rules);
