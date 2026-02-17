@@ -1,34 +1,66 @@
 <?php
 
-namespace App\Scopes;
+namespace App\Models;
 
-use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
-use Illuminate\Database\Eloquent\Scope;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
-class TenantScope implements Scope
+abstract class BaseModel extends Model
 {
-    public function apply(Builder $builder, Model $model)
+    use SoftDeletes;
+
+    protected $guarded = [];
+
+    protected $casts = [
+        'created_at' => 'datetime:Y-m-d H:i:s',
+        'updated_at' => 'datetime:Y-m-d H:i:s',
+        'deleted_at' => 'datetime:Y-m-d H:i:s',
+    ];
+
+    public static function boot()
     {
-        // 1. Intentar obtener el Tenant ID del contexto (Middleware) o del usuario
-        // Prioridad: 1. Contexto Global (Seteado por Middleware al detectar subdominio)
-        //            2. Usuario Autenticado (Fallback)
-        $tenantId = app()->bound('current_tenant_id') ? app('current_tenant_id') : (auth()->id() ? auth()->user()->tenant_id : null);
+        parent::boot();
 
-        // 2. SEGURIDAD BRUTAL: Evitar "Fail-Open"
-        // Si no hay tenant identificado, NO mostrar nada (o solo globales).
-        // Esto evita que el Login busque usuarios en toda la BD si falla el contexto.
-        if (!$tenantId) {
-            // Opción A: Bloquear todo si no hay contexto (Más seguro para SaaS estricto)
-            // $builder->whereRaw('1 = 0'); 
-            
-            // Opción B: Permitir si estás en consola o es una ruta explícitamente sin tenant.
-            // Para el login, el middleware DEBE haber seteado 'current_tenant_id'.
-            return; 
-        }
+        // Auto-asignar tenant_id al crear registros
+        static::creating(function ($model) {
+            if (method_exists($model, 'getTenantIdColumn')) {
+                $tenantId = app('tenant_id') ?? auth()->user()?->tenant_id;
+                if ($tenantId && !$model->{$model->getTenantIdColumn()}) {
+                    $model->{$model->getTenantIdColumn()} = $tenantId;
+                }
+            }
+        });
 
-        // 3. Aplicar el filtro usando la columna dinámica
-        $column = $model->getTable() . '.' . $model->getTenantIdColumn();
-        $builder->where($column, $tenantId);
+        // Filtrar por tenant en consultas
+        // SOLUCION: Solo aplica el scope si tenant_id está disponible
+        // Esto permite que el login funcione sin tenant_id en el contenedor
+        static::addGlobalScope(function ($query) {
+            if (method_exists($query->getModel(), 'getTenantIdColumn')) {
+                $tenantId = app('tenant_id') ?? auth()->user()?->tenant_id;
+                
+                // Solo aplica el filtro de tenant si está disponible
+                // Durante login, no habrá tenant_id en el contenedor
+                if ($tenantId) {
+                    $query->where($query->getModel()->getTable() . '.tenant_id', $tenantId);
+                }
+                // Si no hay tenant_id disponible, NO aplicar el scope
+                // Esto permite que User::where('email', ...) funcione sin tenant_id
+            }
+        });
+    }
+
+    protected function getTenantIdColumn(): string
+    {
+        return 'tenant_id';
+    }
+
+    public function scopeForTenant($query, int $tenantId)
+    {
+        return $query->where($this->getTable() . '.tenant_id', $tenantId);
+    }
+
+    public function scopeActive($query)
+    {
+        return $query->where('is_active', true);
     }
 }
