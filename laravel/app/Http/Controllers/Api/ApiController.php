@@ -2,13 +2,16 @@
 
 namespace App\Http\Controllers\Api;
 
-// 🔥 IMPORTACIÓN VITAL: Sin esto, PHP busca el Controller en la carpeta Api y falla.
-use App\Http\Controllers\Controller; 
-
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 
-class ApiController extends Controller
+/**
+ * 🔥 FUERZA BRUTA APLICADA:
+ * Usamos la barra invertida "\" para indicar la ruta absoluta.
+ * Esto ignora cualquier "use" incorrecto y obliga a PHP a buscar el archivo
+ * en la carpeta base "App\Http\Controllers".
+ */
+class ApiController extends \App\Http\Controllers\Controller
 {
     /**
      * Respuesta de éxito estandarizada.
