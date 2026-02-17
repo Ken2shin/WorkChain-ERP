@@ -53,9 +53,10 @@ class AuthController extends ApiController
                 return $this->unauthorized('Invalid credentials');
             }
 
-            if (!$user->is_active) {
-                return $this->unauthorized('Account is inactive');
-            }
+            if ($user->status !== 'active') {
+    return $this->unauthorized('Account is inactive');
+}
+
 
             if (!Hash::check($validated['password'], $user->password)) {
                 return $this->unauthorized('Invalid credentials');
