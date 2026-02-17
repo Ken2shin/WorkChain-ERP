@@ -2,17 +2,20 @@
 
 namespace App\Http\Controllers\Api;
 
+// 🔥 CAMBIO RADICAL:
+// Saltamos el archivo "App\Http\Controllers\Controller" que da problemas
+// y vamos directo al núcleo de Laravel.
+use Illuminate\Routing\Controller as BaseController;
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
+use Illuminate\Foundation\Validation\ValidatesRequests;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Validator;
 
-/**
- * 🔥 FUERZA BRUTA APLICADA:
- * Usamos la barra invertida "\" para indicar la ruta absoluta.
- * Esto ignora cualquier "use" incorrecto y obliga a PHP a buscar el archivo
- * en la carpeta base "App\Http\Controllers".
- */
-class ApiController extends \App\Http\Controllers\Controller
+class ApiController extends BaseController
 {
+    // Agregamos los Traits manualmente porque nos saltamos el controlador intermedio
+    use AuthorizesRequests, ValidatesRequests;
+
     /**
      * Respuesta de éxito estandarizada.
      */
@@ -60,7 +63,7 @@ class ApiController extends \App\Http\Controllers\Controller
     }
 
     /**
-     * Validador que retorna JSON automáticamente si falla.
+     * Validador seguro.
      */
     protected function validateDataOrFail(array $data, array $rules): JsonResponse|array
     {
