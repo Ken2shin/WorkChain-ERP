@@ -2,9 +2,8 @@
 
 namespace App\Http\Controllers\Api;
 
-// 🔥 CAMBIO RADICAL:
-// Saltamos el archivo "App\Http\Controllers\Controller" que da problemas
-// y vamos directo al núcleo de Laravel.
+// 🔥 CAMBIO RADICAL (MANTENIDO):
+// Heredamos directamente del núcleo de Laravel para evitar errores de archivos corruptos.
 use Illuminate\Routing\Controller as BaseController;
 use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Foundation\Validation\ValidatesRequests;
@@ -13,15 +12,28 @@ use Illuminate\Support\Facades\Validator;
 
 class ApiController extends BaseController
 {
-    // Agregamos los Traits manualmente porque nos saltamos el controlador intermedio
     use AuthorizesRequests, ValidatesRequests;
+
+    /**
+     * 🛡️ MÉTODO PRIVADO DE SEGURIDAD
+     * Centraliza la creación de respuestas para inyectar headers de seguridad
+     * y asegurar la codificación correcta de caracteres.
+     */
+    private function secureResponse(array $data, int $code): JsonResponse
+    {
+        return response()->json($data, $code, [], JSON_UNESCAPED_UNICODE | JSON_HEX_TAG | JSON_HEX_APOS | JSON_HEX_AMP | JSON_HEX_QUOT)
+            ->header('Content-Type', 'application/json')
+            ->header('X-Content-Type-Options', 'nosniff') // Evita MIME sniffing
+            ->header('X-Frame-Options', 'DENY')           // Evita Clickjacking
+            ->header('X-XSS-Protection', '1; mode=block'); // Protección XSS adicional
+    }
 
     /**
      * Respuesta de éxito estandarizada.
      */
     protected function success($data = null, string $message = 'Success', int $code = 200): JsonResponse
     {
-        return response()->json([
+        return $this->secureResponse([
             'success' => true,
             'message' => $message,
             'data'    => $data,
@@ -42,7 +54,7 @@ class ApiController extends BaseController
             $response['errors'] = $errors;
         }
 
-        return response()->json($response, $code);
+        return $this->secureResponse($response, $code);
     }
 
     // --- Helpers de estado HTTP ---
